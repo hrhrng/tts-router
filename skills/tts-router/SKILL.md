@@ -1,6 +1,6 @@
 ---
 name: tts-router
-description: Local TTS router for Apple Silicon — pull models, serve OpenAI-compatible API, synthesize speech. Use when the user asks to "generate speech", "text to speech", "start TTS server", "pull a TTS model", or any task involving local speech synthesis.
+description: Local TTS router for Apple Silicon — pull models, serve OpenAI-compatible API, synthesize speech, clone voices. Use when the user asks to "generate speech", "text to speech", "start TTS server", "pull a TTS model", "clone a voice", "speak in someone's voice", or any task involving local speech synthesis on macOS.
 ---
 
 # tts-router — Local TTS Router for Apple Silicon
@@ -90,10 +90,19 @@ curl -X POST http://localhost:8091/v1/audio/speech \
 
 ## API Endpoints (when serving)
 
-| Endpoint                        | Method | Description               |
-| ------------------------------- | ------ | ------------------------- |
-| `GET /`                         | GET    | Playground UI             |
-| `POST /v1/audio/speech`        | POST   | OpenAI-compatible TTS     |
-| `GET /v1/audio/voices`         | GET    | List available voices     |
-| `GET /health`                  | GET    | Health check              |
-| `POST /v1/audio/clone`        | POST   | Voice clone generation    |
+| Endpoint                             | Method | Description               |
+| ------------------------------------ | ------ | ------------------------- |
+| `GET /`                              | GET    | Playground UI             |
+| `POST /v1/audio/speech`              | POST   | OpenAI-compatible TTS     |
+| `GET /v1/audio/voices`               | GET    | List available voices     |
+| `GET /health`                        | GET    | Health check              |
+| `POST /v1/audio/clone`               | POST   | Voice clone generation    |
+| `POST /v1/audio/references/upload`   | POST   | Upload reference audio    |
+| `POST /v1/audio/references/from-url` | POST   | Fetch ref audio by URL    |
+
+## Advanced Use Cases
+
+For more complex workflows, read the relevant reference file:
+
+- **Clone a voice from any URL** (YouTube, Bilibili, podcast, direct audio link) →
+  read `references/voice-cloning.md`
