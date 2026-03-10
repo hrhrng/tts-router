@@ -7,10 +7,14 @@ Pull models, serve an API, or synthesize speech directly from the command line.
 ## Install
 
 ```bash
+# Recommended (isolated, no venv needed)
+uvx --prerelease=allow tts-router list
+
+# Or install globally
 pip install tts-router
-# or
-uv pip install tts-router
 ```
+
+> **Note:** `uvx` requires `--prerelease=allow` because `mlx-audio` currently depends on a pre-release version of `transformers`.
 
 Requires Python 3.11+ and macOS with Apple Silicon (M1/M2/M3/M4).
 
