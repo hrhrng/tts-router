@@ -11,7 +11,8 @@ Models are downloaded from HuggingFace Hub and served via OpenAI + DashScope com
 ## Prerequisites
 
 - macOS with Apple Silicon (M1/M2/M3/M4)
-- `uv` installed (`curl -LsSf https://astral.sh/uv/install.sh | sh`)
+- `uv` installed — see https://docs.astral.sh/uv/getting-started/installation/
+  (e.g. `brew install uv` or via the official installer)
 - ffmpeg installed (`brew install ffmpeg`)
 
 ## Install
