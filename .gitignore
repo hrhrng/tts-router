@@ -6,3 +6,11 @@
 __pycache__/
 *.pyc
 *.pyo
+
+.claude/
+
+# Build artifacts
+dist/
+
+# skills.sh lock file (local install state)
+skills-lock.json
