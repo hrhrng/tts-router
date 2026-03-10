@@ -1,0 +1,70 @@
+[project]
+name = "tts-router"
+version = "0.1.0"
+description = "Local TTS router — multi-backend (MLX, VibeVoice), DashScope + OpenAI compatible"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Topic :: Multimedia :: Sound/Audio :: Speech",
+]
+dependencies = [
+    # ── Web framework & server ───────────────────────────────────────────
+    "fastapi",
+    "uvicorn",
+    "python-multipart",
+    # ── CLI ───────────────────────────────────────────────────────────────
+    "typer-slim",
+    # ── Audio I/O ─────────────────────────────────────────────────────────
+    "soundfile",
+    # ── HuggingFace Hub (model downloads) ─────────────────────────────────
+    "huggingface_hub",
+    # ── Media extraction (optional but included by default) ───────────────
+    "yt-dlp",
+    # ── MLX backend (Apple Silicon only, auto-skipped on other platforms) ─
+    "mlx-audio>=0.3.1; platform_machine == 'arm64' and sys_platform == 'darwin'",
+]
+
+[project.optional-dependencies]
+# Force-install mlx-audio on non-Apple-Silicon (or upgrade to git version)
+mlx = [
+    "mlx-audio>=0.3.1",
+]
+# vibevoice must be installed manually from git:
+#   pip install git+https://github.com/vibevoice-community/VibeVoice.git
+# PyPI does not allow direct git references in published packages.
+
+[project.scripts]
+tts-router = "cli:app"
+
+[dependency-groups]
+dev = ["pytest", "httpx"]
+
+# Force compatible versions across backends (mlx-audio / vibevoice pin
+# conflicting transitive deps). We pick the newest compatible version.
+[tool.uv]
+override-dependencies = [
+    "librosa>=0.10.2",
+    "transformers>=4.51.3,<5",
+    "accelerate>=1.6.0",
+    "numpy>=1.26.2",
+    "numba>=0.57.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+# Flat-layout project — tell hatch which files to include in the wheel.
+# Without this, hatch looks for a tts_router/ package directory and fails.
+[tool.hatch.build.targets.wheel]
+packages = ["."]
+only-include = ["cli.py", "server.py", "extractors.py", "backends", "playground.html"]

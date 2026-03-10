@@ -1,0 +1,2732 @@
+<!--
+╔═══════════════════════════════════════════════════════════════════════════════╗
+║  tts-router Playground — Single-file Web UI                                  ║
+║                                                                              ║
+║  MODULE INDEX (line numbers for agent navigation)                            ║
+║  ──────────────────────────────────────────────────────────────────────────── ║
+║  CSS                                                                         ║
+║    :root variables & reset .............. ~L12                                ║
+║    Layout (header, tabs, main grid) ..... ~L50                               ║
+║    Cards & form elements ................ ~L145                               ║
+║    Buttons .............................. ~L243                               ║
+║    Player & waveform .................... ~L333                               ║
+║    Voice comparison ..................... ~L401                               ║
+║    History list ......................... ~L464                               ║
+║    Toast notifications .................. ~L523                               ║
+║    Voice clone (drop zone, refs, trim) .. ~L572                              ║
+║    Responsive breakpoints ............... ~L872                               ║
+║                                                                              ║
+║  HTML                                                                        ║
+║    Header (logo, health, API docs) ...... ~L884                              ║
+║    Tab bar (TTS / Voice Clone) .......... ~L900                              ║
+║    TTS panel (text, lang, voice, etc) ... ~L915                              ║
+║    Clone panel (URL, upload, refs, gen) . ~L975                              ║
+║    Results panel (player, compare, hist)  ~L1058                             ║
+║                                                                              ║
+║  JavaScript                                                                  ║
+║    Constants (SPEAKER_MAP, PRESETS) ..... ~L1092                              ║
+║    State object ......................... ~L1121                              ║
+║    DOM cache & init ..................... ~L1158                              ║
+║    Tab switching ........................ ~L1290                              ║
+║    Voice/language linking ............... ~L1306                              ║
+║    Presets .............................. ~L1330                              ║
+║    API: callTTS() ...................... ~L1357                               ║
+║    TTS generation handler .............. ~L1391                               ║
+║    Voice comparison .................... ~L1455                               ║
+║    Player controls ..................... ~L1581                               ║
+║    Waveform visualization .............. ~L1629                               ║
+║    History management .................. ~L1705                               ║
+║    Health check ........................ ~L1788                               ║
+║    Utilities ........................... ~L1817                               ║
+║    Clone: UI state ..................... ~L1860                               ║
+║    Clone: URL download ................. ~L1893                               ║
+║    Clone: file upload (drag & drop) .... ~L1939                              ║
+║    Clone: reference list ............... ~L2003                               ║
+║    Clone: inline trim editor ........... ~L2115                              ║
+║    Clone: generation ................... ~L2469                               ║
+║                                                                              ║
+║  NOTE: After editing, update line numbers above to keep index accurate.      ║
+╚═══════════════════════════════════════════════════════════════════════════════╝
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>tts-router Playground</title>
+<style>
+/* ── Reset & Variables ─────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg-primary: #0d1117;
+  --bg-secondary: #161b22;
+  --bg-tertiary: #21262d;
+  --bg-hover: #292e36;
+  --border: #30363d;
+  --border-light: #3d444d;
+  --text-primary: #e6edf3;
+  --text-secondary: #8b949e;
+  --text-tertiary: #6e7681;
+  --accent: #8b5cf6;
+  --accent-dim: rgba(139, 92, 246, 0.15);
+  --accent-hover: #a78bfa;
+  --accent-gradient: linear-gradient(135deg, #6366f1, #8b5cf6);
+  --success: #3fb950;
+  --success-dim: rgba(63, 185, 80, 0.15);
+  --warning: #d29922;
+  --error: #f85149;
+  --clone-gradient: linear-gradient(135deg, #059669, #10b981);
+  --radius: 10px;
+  --radius-sm: 6px;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  line-height: 1.5;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ── Scrollbar ─────────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--border-light); }
+
+/* ── Layout ────────────────────────────────────────────────────────────────── */
+#app {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0 24px 24px;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.logo { display: flex; align-items: center; gap: 12px; }
+.logo h1 {
+  font-size: 22px;
+  font-weight: 700;
+  background: var(--accent-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 20px;
+  background: var(--accent-dim);
+  color: var(--accent);
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+#health-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.health-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--text-tertiary);
+  transition: background 0.3s;
+}
+.health-dot.ok { background: var(--success); box-shadow: 0 0 6px var(--success); }
+.health-dot.err { background: var(--error); box-shadow: 0 0 6px var(--error); }
+
+/* ── Tab Bar ───────────────────────────────────────────────────────────────── */
+.tab-bar {
+  display: flex;
+  gap: 0;
+  padding: 0;
+  margin-bottom: 24px;
+  border-bottom: 1px solid var(--border);
+}
+.tab-btn {
+  padding: 12px 24px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.tab-btn:hover { color: var(--text-primary); }
+.tab-btn.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+.tab-btn.active.clone-tab {
+  color: var(--success);
+  border-bottom-color: var(--success);
+}
+.tab-icon { font-size: 16px; }
+
+main {
+  display: grid;
+  grid-template-columns: 380px 1fr;
+  gap: 24px;
+  align-items: start;
+}
+
+/* ── Tab Panels (left side controls) ──────────────────────────────────────── */
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+/* ── Card ──────────────────────────────────────────────────────────────────── */
+.card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px;
+  margin-bottom: 16px;
+}
+.card h3 {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  margin-bottom: 14px;
+}
+
+/* ── Form Elements ─────────────────────────────────────────────────────────── */
+label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+
+textarea, input[type="text"], input[type="url"], select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  font-size: 14px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.2s;
+}
+textarea:focus, input[type="text"]:focus, input[type="url"]:focus, select:focus {
+  border-color: var(--accent);
+}
+textarea {
+  resize: vertical;
+  min-height: 100px;
+  max-height: 240px;
+  line-height: 1.6;
+}
+select { cursor: pointer; }
+select option { background: var(--bg-tertiary); }
+
+.char-count {
+  text-align: right;
+  font-size: 12px;
+  color: var(--text-tertiary);
+  margin-top: 4px;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+/* ── Range Slider ──────────────────────────────────────────────────────────── */
+.speed-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.speed-val {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--bg-tertiary);
+  outline: none;
+  margin-top: 4px;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+  box-shadow: 0 0 8px rgba(139, 92, 246, 0.4);
+  transition: transform 0.15s;
+}
+input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); }
+
+/* ── Buttons ───────────────────────────────────────────────────────────────── */
+.btn-primary {
+  width: 100%;
+  padding: 12px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--accent-gradient);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s, transform 0.1s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.btn-primary:hover:not(:disabled) { opacity: 0.9; }
+.btn-primary:active:not(:disabled) { transform: scale(0.98); }
+.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.btn-secondary {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ── Preset Tags ───────────────────────────────────────────────────────────── */
+.presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.preset-tag {
+  padding: 4px 12px;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+.preset-tag:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-dim);
+}
+.preset-tag.active {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+  color: var(--accent);
+}
+
+/* ── Compare Voice Pills ───────────────────────────────────────────────────── */
+.compare-section { margin-top: 0; }
+.voice-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0;
+}
+.voice-pill {
+  padding: 6px 14px;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.voice-pill.selected {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+  color: var(--accent);
+}
+.voice-pill:hover:not(.selected) { border-color: var(--border-light); color: var(--text-primary); }
+
+.hidden { display: none !important; }
+
+/* ── Player ────────────────────────────────────────────────────────────────── */
+#waveform-canvas {
+  width: 100%;
+  height: 80px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  margin-bottom: 12px;
+}
+
+.player-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.play-btn {
+  width: 40px; height: 40px;
+  border-radius: 50%;
+  border: none;
+  background: var(--accent-gradient);
+  color: #fff;
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: opacity 0.15s, transform 0.1s;
+}
+.play-btn:hover { opacity: 0.85; }
+.play-btn:active { transform: scale(0.92); }
+
+.progress-wrap {
+  flex: 1;
+  height: 6px;
+  background: var(--bg-tertiary);
+  border-radius: 3px;
+  cursor: pointer;
+  position: relative;
+}
+.progress-fill {
+  height: 100%;
+  background: var(--accent-gradient);
+  border-radius: 3px;
+  width: 0%;
+  transition: width 0.1s linear;
+}
+
+.time-display {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  min-width: 80px;
+  text-align: right;
+}
+
+.stats-bar {
+  display: flex;
+  gap: 16px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+.stat-item span { color: var(--text-secondary); font-weight: 500; }
+
+/* ── Comparison Results ────────────────────────────────────────────────────── */
+.compare-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  margin-bottom: 8px;
+  background: var(--bg-tertiary);
+  transition: border-color 0.2s;
+}
+.compare-item:hover { border-color: var(--border-light); }
+.compare-voice {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  min-width: 80px;
+}
+.compare-play-btn {
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.2s;
+}
+.compare-play-btn:hover { border-color: var(--accent); color: var(--accent); }
+.compare-progress {
+  flex: 1;
+  height: 4px;
+  background: var(--bg-secondary);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.compare-progress-fill {
+  height: 100%;
+  background: var(--accent);
+  width: 0%;
+  border-radius: 2px;
+}
+.compare-stats {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+.compare-download {
+  background: none;
+  border: none;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 4px;
+  transition: color 0.2s;
+}
+.compare-download:hover { color: var(--accent); }
+
+/* ── History ───────────────────────────────────────────────────────────────── */
+.history-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background 0.15s;
+  font-size: 13px;
+}
+.history-item:hover { background: var(--bg-tertiary); }
+.history-play {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 10px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.2s;
+}
+.history-play:hover { border-color: var(--accent); color: var(--accent); }
+.history-info { flex: 1; min-width: 0; }
+.history-text {
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 13px;
+}
+.history-meta {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  margin-top: 2px;
+}
+.history-download {
+  background: none;
+  border: none;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  font-size: 13px;
+  padding: 4px;
+  transition: color 0.2s;
+  flex-shrink: 0;
+}
+.history-download:hover { color: var(--accent); }
+
+.empty-state {
+  text-align: center;
+  padding: 32px 16px;
+  color: var(--text-tertiary);
+  font-size: 13px;
+}
+
+/* ── Toast ──────────────────────────────────────────────────────────────────── */
+#toast-container {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.toast {
+  padding: 12px 20px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 500;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  transform: translateX(120%);
+  transition: transform 0.3s ease;
+  max-width: 360px;
+}
+.toast.show { transform: translateX(0); }
+.toast-error { background: #3d1214; border: 1px solid var(--error); color: var(--error); }
+.toast-success { background: #122117; border: 1px solid var(--success); color: var(--success); }
+.toast-info { background: #0d1b2a; border: 1px solid #58a6ff; color: #58a6ff; }
+
+/* ── Spinner ───────────────────────────────────────────────────────────────── */
+.spinner {
+  display: inline-block;
+  width: 16px; height: 16px;
+  border: 2px solid transparent;
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Generating Overlay ────────────────────────────────────────────────────── */
+.generating-indicator {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  color: var(--text-secondary);
+  gap: 12px;
+}
+.generating-indicator .spinner { width: 28px; height: 28px; border-width: 3px; color: var(--accent); }
+.generating-indicator p { font-size: 14px; }
+
+/* ── Voice Clone — Drop Zone ─────────────────────────────────────────────── */
+.drop-zone {
+  border: 2px dashed var(--border);
+  border-radius: var(--radius-sm);
+  padding: 24px 16px;
+  text-align: center;
+  color: var(--text-tertiary);
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+}
+.drop-zone:hover, .drop-zone.dragover {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+  color: var(--text-secondary);
+}
+.drop-zone-icon { font-size: 24px; margin-bottom: 6px; display: block; }
+.drop-zone input[type="file"] { display: none; }
+
+/* ── Reference List ───────────────────────────────────────────────────────── */
+.ref-list { margin-top: 12px; }
+.ref-list-label {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.ref-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  margin-bottom: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-size: 13px;
+}
+.ref-item:hover { background: var(--bg-tertiary); }
+.ref-item.selected {
+  border-color: var(--success);
+  background: var(--success-dim);
+}
+.ref-item-play {
+  width: 24px; height: 24px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 10px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.2s;
+}
+.ref-item-play:hover { border-color: var(--accent); color: var(--accent); }
+.ref-item-name {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-primary);
+}
+.ref-item-dur {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+.ref-item-del {
+  background: none;
+  border: none;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px;
+  transition: color 0.2s;
+  flex-shrink: 0;
+}
+.ref-item-del:hover { color: var(--error); }
+
+/* ── Trim button inside ref-item ──────────────────────────────────────────── */
+.ref-item-trim {
+  background: none;
+  border: none;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px;
+  transition: color 0.2s;
+  flex-shrink: 0;
+}
+.ref-item-trim:hover { color: var(--warning); }
+
+/* ── Inline Trim Editor Panel ─────────────────────────────────────────────── */
+.trim-editor {
+  border: 1px solid var(--border);
+  border-top: none;
+  border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+  background: var(--bg-secondary);
+  padding: 12px;
+  margin-top: -7px;          /* overlap ref-item bottom border */
+  margin-bottom: 6px;
+  overflow: hidden;
+  animation: trimSlideDown 0.2s ease-out;
+}
+@keyframes trimSlideDown {
+  from { max-height: 0; opacity: 0; padding-top: 0; padding-bottom: 0; }
+  to   { max-height: 300px; opacity: 1; }
+}
+.ref-item.trim-open {
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  margin-bottom: 0;
+  border-color: var(--border-light);
+}
+
+/* Waveform canvas container */
+.trim-waveform-wrap {
+  position: relative;
+  height: 72px;
+  margin-bottom: 8px;
+  cursor: crosshair;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.trim-waveform-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  border-radius: 4px;
+}
+
+/* Draggable handle overlays (positioned via JS) */
+.trim-handle {
+  position: absolute;
+  top: 0;
+  width: 6px;
+  height: 100%;
+  cursor: ew-resize;
+  z-index: 2;
+}
+.trim-handle::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 4px;
+  height: 24px;
+  border-radius: 2px;
+  background: var(--accent);
+  box-shadow: 0 0 6px rgba(139, 92, 246, 0.5);
+  transition: height 0.15s, background 0.15s;
+}
+.trim-handle:hover::after,
+.trim-handle.dragging::after {
+  height: 32px;
+  background: var(--accent-hover);
+}
+.trim-handle-start { left: 0; }
+.trim-handle-end   { left: 0; }
+
+/* Time labels + duration row */
+.trim-times {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  color: var(--text-tertiary);
+  margin-bottom: 10px;
+  font-variant-numeric: tabular-nums;
+}
+.trim-duration {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+/* Action buttons row */
+.trim-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.trim-actions button {
+  padding: 5px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.trim-actions button:hover { border-color: var(--border-light); background: var(--bg-hover); }
+.trim-btn-preview:hover { border-color: var(--accent); color: var(--accent); }
+.trim-btn-apply {
+  background: var(--accent-gradient) !important;
+  border-color: transparent !important;
+  color: #fff !important;
+  font-weight: 500;
+}
+.trim-btn-apply:hover { opacity: 0.9; }
+.trim-btn-apply:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── URL Input Row ────────────────────────────────────────────────────────── */
+.url-input-row {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+.url-input-row input[type="url"] {
+  flex: 1;
+}
+.btn-download {
+  padding: 10px 16px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--clone-gradient);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: opacity 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.btn-download:hover:not(:disabled) { opacity: 0.9; }
+.btn-download:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.divider-or {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 14px 0;
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
+.divider-or::before, .divider-or::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+/* ── Clone Generate Button (green) ────────────────────────────────────────── */
+.btn-clone {
+  width: 100%;
+  padding: 12px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--clone-gradient);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s, transform 0.1s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.btn-clone:hover:not(:disabled) { opacity: 0.9; }
+.btn-clone:active:not(:disabled) { transform: scale(0.98); }
+.btn-clone:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.clone-notice {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  margin-top: 8px;
+  text-align: center;
+  line-height: 1.4;
+}
+
+.url-hint {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  margin-top: 6px;
+  line-height: 1.4;
+}
+
+.clone-disabled-msg {
+  text-align: center;
+  padding: 24px 16px;
+  color: var(--text-tertiary);
+  font-size: 13px;
+}
+
+/* ── Responsive ────────────────────────────────────────────────────────────── */
+@media (max-width: 860px) {
+  main { grid-template-columns: 1fr; }
+  .tab-btn { padding: 10px 16px; font-size: 13px; }
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- Toast notifications -->
+  <div id="toast-container"></div>
+
+  <!-- Header -->
+  <header>
+    <div class="logo">
+      <h1>tts-router</h1>
+      <span class="badge">Playground</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:16px">
+      <a href="/docs" target="_blank" style="font-size:12px;color:var(--text-tertiary);text-decoration:none;border:1px solid var(--border);padding:4px 10px;border-radius:var(--radius-sm);transition:all 0.2s" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-tertiary)'">API Docs</a>
+      <div id="health-status">
+        <div class="health-dot" id="health-dot"></div>
+        <span id="health-text">Connecting...</span>
+        <span id="health-model" style="font-size:12px;color:var(--text-tertiary);margin-left:4px"></span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Tab Bar -->
+  <div class="tab-bar">
+    <button class="tab-btn active" data-tab="tts">
+      <span class="tab-icon">&#9836;</span> Text to Speech
+    </button>
+    <button class="tab-btn clone-tab" data-tab="clone">
+      <span class="tab-icon">&#127908;</span> Voice Clone
+    </button>
+  </div>
+
+  <!-- Main layout: left controls + right results -->
+  <main>
+    <!-- Left: Controls (tab-switched) -->
+    <aside id="controls">
+
+      <!-- ═══ TTS Tab Panel ═══════════════════════════════════════════════ -->
+      <div class="tab-panel active" id="panel-tts">
+        <!-- Text Input -->
+        <div class="card">
+          <label for="tts-text">Text</label>
+          <textarea id="tts-text" placeholder="Enter text to synthesize..."></textarea>
+          <div class="char-count"><span id="tts-char-count">0</span> characters</div>
+        </div>
+
+        <!-- Language & Voice -->
+        <div class="card">
+          <div class="row">
+            <div>
+              <label for="tts-lang">Language</label>
+              <select id="tts-lang">
+                <option value="Chinese">Chinese</option>
+                <option value="English">English</option>
+                <option value="Japanese">Japanese</option>
+                <option value="Korean">Korean</option>
+              </select>
+            </div>
+            <div>
+              <label for="tts-voice">Voice</label>
+              <select id="tts-voice"></select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Instructions (shown for models with instruct feature) -->
+        <div class="card" id="tts-instructions-card">
+          <label for="tts-instructions">Instructions <span style="color:var(--text-tertiary);font-weight:400">(optional)</span></label>
+          <input type="text" id="tts-instructions" placeholder="e.g., Speak with a cheerful tone">
+          <div class="presets" id="tts-presets"></div>
+        </div>
+
+        <!-- Speed & Temperature -->
+        <div class="card">
+          <div class="speed-label">
+            <label for="tts-speed" style="margin-bottom:0">Speed</label>
+            <span class="speed-val" id="tts-speed-val">1.0x</span>
+          </div>
+          <input type="range" id="tts-speed" min="0.5" max="2.0" step="0.1" value="1.0">
+
+          <div style="margin-top:12px">
+            <div class="speed-label">
+              <label for="tts-temperature" style="margin-bottom:0">Temperature</label>
+              <span class="speed-val" id="tts-temperature-val">default</span>
+            </div>
+            <input type="range" id="tts-temperature" min="0" max="1.5" step="0.05" value="0">
+          </div>
+
+          <!-- Exaggeration (shown for chatterbox) -->
+          <div style="margin-top:12px" id="tts-exaggeration-wrap" class="hidden">
+            <div class="speed-label">
+              <label for="tts-exaggeration" style="margin-bottom:0">Exaggeration</label>
+              <span class="speed-val" id="tts-exaggeration-val">0.10</span>
+            </div>
+            <input type="range" id="tts-exaggeration" min="0.0" max="1.0" step="0.05" value="0.1">
+          </div>
+        </div>
+
+        <!-- Generate -->
+        <button class="btn-primary" id="tts-generate-btn" title="Ctrl+Enter">
+          <span id="tts-generate-label">Generate Speech</span>
+          <kbd style="font-size:11px;opacity:0.6;margin-left:4px;font-family:inherit">&#8984;Enter</kbd>
+        </button>
+
+        <!-- Compare Section -->
+        <div class="card compare-section" style="margin-top:16px">
+          <button class="btn-secondary" id="compare-toggle">Compare Voices</button>
+          <div id="compare-panel" class="hidden">
+            <div class="voice-pills" id="voice-pills"></div>
+            <button class="btn-primary" id="compare-btn" style="margin-top:4px">
+              <span id="compare-label">Generate Comparison</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ Voice Clone Tab Panel ═══════════════════════════════════════ -->
+      <div class="tab-panel" id="panel-clone">
+        <div id="clone-content">
+          <!-- Add Reference Audio card -->
+          <div class="card">
+            <h3>Add Reference Audio</h3>
+
+            <!-- URL input -->
+            <label for="clone-url">URL</label>
+            <div class="url-input-row">
+              <input type="url" id="clone-url" placeholder="Paste YouTube / Bilibili / audio URL...">
+              <button class="btn-download" id="clone-url-btn">
+                <span id="clone-url-label">Download</span>
+              </button>
+            </div>
+            <div class="url-hint" id="clone-url-hint">Supports direct audio links (.mp3, .wav, etc.)</div>
+
+            <div class="divider-or">or</div>
+
+            <!-- File upload drop zone -->
+            <div class="drop-zone" id="drop-zone">
+              <span class="drop-zone-icon">&#128190;</span>
+              Drop audio file here<br>or click to upload
+              <input type="file" id="ref-file-input" accept=".wav,.mp3,.flac,.m4a,.ogg,.webm,.aac">
+            </div>
+          </div>
+
+          <!-- Saved References card -->
+          <div class="card">
+            <h3>Saved References</h3>
+            <div id="ref-list"></div>
+          </div>
+
+          <!-- Generate with Clone card -->
+          <div class="card">
+            <h3>Generate</h3>
+
+            <!-- Clone text input -->
+            <label for="clone-text">Text</label>
+            <textarea id="clone-text" placeholder="Enter text to synthesize with cloned voice..." style="min-height:80px"></textarea>
+            <div class="char-count"><span id="clone-char-count">0</span> characters</div>
+
+            <div class="row" style="margin-top:12px">
+              <div>
+                <label for="clone-lang">Language</label>
+                <select id="clone-lang">
+                  <option value="Chinese">Chinese</option>
+                  <option value="English">English</option>
+                  <option value="Japanese">Japanese</option>
+                  <option value="Korean">Korean</option>
+                </select>
+              </div>
+              <div>
+                <div class="speed-label">
+                  <label for="clone-speed" style="margin-bottom:0">Speed</label>
+                  <span class="speed-val" id="clone-speed-val">1.0x</span>
+                </div>
+                <input type="range" id="clone-speed" min="0.5" max="2.0" step="0.1" value="1.0">
+              </div>
+            </div>
+
+            <!-- Reference text (optional) -->
+            <div style="margin-top:12px">
+              <label for="clone-ref-text">Ref Text <span style="color:var(--text-tertiary);font-weight:400">(optional, auto-detected if empty)</span></label>
+              <input type="text" id="clone-ref-text" placeholder="Transcript of the reference audio...">
+            </div>
+
+            <!-- Generate with Clone button -->
+            <button class="btn-clone" id="clone-generate-btn" disabled style="margin-top:14px" title="Ctrl+Enter">
+              <span id="clone-generate-label">Generate with Clone</span>
+              <kbd style="font-size:11px;opacity:0.6;margin-left:4px;font-family:inherit">&#8984;Enter</kbd>
+            </button>
+            <div class="clone-notice" id="clone-notice">Select a reference audio above, then enter text.</div>
+          </div>
+        </div>
+
+        <!-- Shown when clone is disabled server-side -->
+        <div class="clone-disabled-msg hidden" id="clone-disabled-msg">
+          Voice cloning is disabled on this server.<br>
+          <span style="font-size:12px;margin-top:4px;display:inline-block">Start server without --no-clone to enable, or run: tts-router pull qwen3-tts-clone</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Right: Results (shared across tabs) -->
+    <section id="results">
+      <!-- Current Player -->
+      <div class="card hidden" id="player-card">
+        <h3>Now Playing</h3>
+        <canvas id="waveform-canvas"></canvas>
+        <div class="player-controls">
+          <button class="play-btn" id="play-btn">&#9654;</button>
+          <div class="progress-wrap" id="progress-wrap">
+            <div class="progress-fill" id="progress-fill"></div>
+          </div>
+          <span class="time-display" id="time-display">0:00 / 0:00</span>
+        </div>
+        <div class="stats-bar" id="stats-bar"></div>
+      </div>
+
+      <!-- Comparison Results -->
+      <div class="card hidden" id="comparison-card">
+        <h3>Voice Comparison</h3>
+        <div id="comparison-list"></div>
+      </div>
+
+      <!-- History -->
+      <div class="card" id="history-card">
+        <h3>History</h3>
+        <div id="history-list">
+          <div class="empty-state">
+            No generations yet<br>
+            <span style="font-size:12px;margin-top:4px;display:inline-block">Enter text on the left and click Generate to start</span>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════════════
+ *  Constants
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+// Default speaker map — overridden by /v1/models API response
+let SPEAKER_MAP = {
+  English:  ['Ryan', 'Aiden', 'Ethan', 'Chelsie', 'Serena', 'Vivian'],
+  Chinese:  ['Vivian', 'Serena', 'Uncle_Fu', 'Dylan', 'Eric'],
+  Japanese: ['Ono_Anna'],
+  Korean:   ['Sohee'],
+};
+
+const PRESETS = [
+  { label: 'Happy',      value: 'Speak with a happy and cheerful tone' },
+  { label: 'Sad',        value: 'Speak in a sad, melancholic tone' },
+  { label: 'Whisper',    value: 'Speak in a soft whisper' },
+  { label: 'Angry',      value: 'Speak angrily and forcefully' },
+  { label: 'Broadcast',  value: 'Speak like a professional news anchor' },
+  { label: 'Gentle',     value: 'Speak gently and warmly' },
+  { label: 'Excited',    value: 'Speak with excitement and high energy' },
+  { label: 'Storytelling', value: 'Speak like telling an engaging bedtime story' },
+];
+
+const SAMPLE_TEXTS = {
+  Chinese:  '你好，欢迎使用语音合成系统。今天天气真不错，让我们一起来体验语音合成的魅力吧。',
+  English:  'Hello! Welcome to the text-to-speech playground. Let\'s explore different voices and styles together.',
+  Japanese: 'こんにちは、音声合成システムへようこそ。今日はいい天気ですね。',
+  Korean:   '안녕하세요, 음성 합성 시스템에 오신 것을 환영합니다.',
+};
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ *  State
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+const state = {
+  activeTab: 'tts',        // 'tts' or 'clone'
+  generating: false,       // TTS generation in progress
+  comparing: false,        // voice comparison in progress
+  cloning: false,          // voice clone generation in progress
+  downloading: false,      // URL download in progress
+  history: [],             // { id, text, voice, lang, instructions, speed, url, blob, duration, procTime, rtf, ts }
+  currentAudio: null,      // Audio object for the main player
+  audioBuffer: null,       // decoded AudioBuffer for waveform
+  animFrame: null,         // requestAnimationFrame ID
+  compareAudios: [],       // Audio objects for comparison items
+  abortController: null,   // for cancelling in-flight requests
+  refAudio: null,          // Audio object for previewing reference audio
+  references: [],          // list of { ref_id, original_name, duration, uploaded_at }
+  selectedRefId: null,     // currently selected reference audio ID
+  cloneEnabled: true,      // set from /health endpoint
+  urlExtractors: [],       // available URL extractors from /health
+  currentModel: null,      // short name of the loaded model (e.g. "qwen3-tts")
+  modelInfo: null,         // metadata for current model (features, voices, parameters)
+
+  // ── Trim editor state ──────────────────────────────────────────────────
+  trimEditorRefId: null,   // ref_id of the item currently being trimmed (null = closed)
+  trimAudioBuffer: null,   // decoded AudioBuffer for the trim waveform
+  trimStart: 0,            // normalized selection start (0..1)
+  trimEnd: 1,              // normalized selection end (0..1)
+  trimDragging: null,      // which handle is being dragged: 'start' | 'end' | null
+  trimPreviewSource: null, // Web Audio source node for preview playback
+  trimPreviewCtx: null,    // AudioContext used for trim preview
+};
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ *  DOM References (populated in init)
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+const $ = (sel) => document.querySelector(sel);
+const $$ = (sel) => document.querySelectorAll(sel);
+
+let els = {};
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ *  Initialization
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+document.addEventListener('DOMContentLoaded', () => {
+  // Cache DOM elements
+  els = {
+    // TTS tab elements
+    ttsText:         $('#tts-text'),
+    ttsCharCount:    $('#tts-char-count'),
+    ttsLang:         $('#tts-lang'),
+    ttsVoice:        $('#tts-voice'),
+    ttsInstructions: $('#tts-instructions'),
+    ttsInstructionsCard: $('#tts-instructions-card'),
+    ttsPresets:      $('#tts-presets'),
+    ttsSpeed:        $('#tts-speed'),
+    ttsSpeedVal:     $('#tts-speed-val'),
+    ttsTemperature:  $('#tts-temperature'),
+    ttsTemperatureVal: $('#tts-temperature-val'),
+    ttsExaggeration: $('#tts-exaggeration'),
+    ttsExaggerationVal: $('#tts-exaggeration-val'),
+    ttsExaggerationWrap: $('#tts-exaggeration-wrap'),
+    ttsGenerateBtn:  $('#tts-generate-btn'),
+    ttsGenerateLabel:$('#tts-generate-label'),
+    compareToggle:   $('#compare-toggle'),
+    comparePanel:    $('#compare-panel'),
+    voicePills:      $('#voice-pills'),
+    compareBtn:      $('#compare-btn'),
+    compareLabel:    $('#compare-label'),
+
+    // Clone tab elements
+    cloneUrl:        $('#clone-url'),
+    cloneUrlBtn:     $('#clone-url-btn'),
+    cloneUrlLabel:   $('#clone-url-label'),
+    cloneUrlHint:    $('#clone-url-hint'),
+    dropZone:        $('#drop-zone'),
+    refFileInput:    $('#ref-file-input'),
+    refList:         $('#ref-list'),
+    cloneText:       $('#clone-text'),
+    cloneCharCount:  $('#clone-char-count'),
+    cloneLang:       $('#clone-lang'),
+    cloneSpeed:      $('#clone-speed'),
+    cloneSpeedVal:   $('#clone-speed-val'),
+    cloneRefText:    $('#clone-ref-text'),
+    cloneGenerateBtn:$('#clone-generate-btn'),
+    cloneGenerateLabel:$('#clone-generate-label'),
+    cloneNotice:     $('#clone-notice'),
+    cloneContent:    $('#clone-content'),
+    cloneDisabledMsg:$('#clone-disabled-msg'),
+
+    // Shared results panel
+    playerCard:      $('#player-card'),
+    waveformCanvas:  $('#waveform-canvas'),
+    playBtn:         $('#play-btn'),
+    progressWrap:    $('#progress-wrap'),
+    progressFill:    $('#progress-fill'),
+    timeDisplay:     $('#time-display'),
+    statsBar:        $('#stats-bar'),
+    comparisonCard:  $('#comparison-card'),
+    comparisonList:  $('#comparison-list'),
+    historyList:     $('#history-list'),
+    healthDot:       $('#health-dot'),
+    healthText:      $('#health-text'),
+    healthModel:     $('#health-model'),
+  };
+
+  // ── Tab switching ─────────────────────────────────────────────────────
+  $$('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+  });
+
+  // ── TTS tab events ────────────────────────────────────────────────────
+  els.ttsText.addEventListener('input', () => {
+    els.ttsCharCount.textContent = els.ttsText.value.length;
+  });
+  els.ttsLang.addEventListener('change', () => {
+    populateVoices();
+    updateComparePills();
+    els.ttsText.placeholder = SAMPLE_TEXTS[els.ttsLang.value] || 'Enter text...';
+  });
+  els.ttsSpeed.addEventListener('input', () => {
+    els.ttsSpeedVal.textContent = parseFloat(els.ttsSpeed.value).toFixed(1) + 'x';
+  });
+  els.ttsTemperature.addEventListener('input', () => {
+    const val = parseFloat(els.ttsTemperature.value);
+    els.ttsTemperatureVal.textContent = val === 0 ? 'default' : val.toFixed(2);
+  });
+  els.ttsExaggeration.addEventListener('input', () => {
+    els.ttsExaggerationVal.textContent = parseFloat(els.ttsExaggeration.value).toFixed(2);
+  });
+  els.ttsGenerateBtn.addEventListener('click', handleGenerate);
+  els.compareToggle.addEventListener('click', toggleComparePanel);
+  els.compareBtn.addEventListener('click', handleCompare);
+
+  // Ctrl+Enter to generate (works on whichever tab is active)
+  document.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+      if (state.activeTab === 'tts') handleGenerate();
+      else handleClone();
+    }
+  });
+
+  // ── Clone tab events ──────────────────────────────────────────────────
+  els.cloneText.addEventListener('input', () => {
+    els.cloneCharCount.textContent = els.cloneText.value.length;
+  });
+  els.cloneSpeed.addEventListener('input', () => {
+    els.cloneSpeedVal.textContent = parseFloat(els.cloneSpeed.value).toFixed(1) + 'x';
+  });
+  els.cloneUrlBtn.addEventListener('click', handleUrlDownload);
+  els.cloneUrl.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') handleUrlDownload();
+  });
+  els.dropZone.addEventListener('click', () => els.refFileInput.click());
+  els.dropZone.addEventListener('dragover', onDragOver);
+  els.dropZone.addEventListener('dragleave', onDragLeave);
+  els.dropZone.addEventListener('drop', onDrop);
+  els.refFileInput.addEventListener('change', onFileSelected);
+  els.cloneGenerateBtn.addEventListener('click', handleClone);
+
+  // ── Shared player events ──────────────────────────────────────────────
+  els.playBtn.addEventListener('click', togglePlay);
+  els.progressWrap.addEventListener('click', seekAudio);
+  els.waveformCanvas.addEventListener('click', seekAudio);
+
+  // ── Populate UI ───────────────────────────────────────────────────────
+  renderPresets();
+  populateVoices();
+  updateComparePills();
+  checkHealth();
+  fetchModelInfo();
+  loadReferences();
+
+  els.ttsText.placeholder = SAMPLE_TEXTS[els.ttsLang.value] || 'Enter text...';
+  els.cloneText.placeholder = SAMPLE_TEXTS[els.cloneLang.value] || 'Enter text...';
+});
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ *  Tab Switching
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+function switchTab(tab) {
+  state.activeTab = tab;
+
+  // Update tab buttons
+  $$('.tab-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.tab === tab);
+  });
+
+  // Update tab panels
+  $$('.tab-panel').forEach(panel => {
+    panel.classList.toggle('active', panel.id === `panel-${tab}`);
+  });
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ *  Voice / Language Linking (TTS tab)
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+function populateVoices() {
+  const lang = els.ttsLang.value;
+  // Use model-specific voices if available
+  let voices = [];
+  if (state.modelInfo && state.modelInfo.voices) {
+    const mv = state.modelInfo.voices;
+    // Check for language-specific voices first, then _all, then fallback
+    voices = mv[lang] || mv['_all'] || [];
+  }
+  if (voices.length === 0) {
+    // Fallback to default SPEAKER_MAP
+    voices = SPEAKER_MAP[lang] || [];
+  }
+  if (voices.length === 0) {
+    els.ttsVoice.innerHTML = '<option value="">(default)</option>';
+  } else {
+    els.ttsVoice.innerHTML = voices.map(v => `<option value="${v}">${v}</option>`).join('');
+  }
+}
+
+/** Render selectable pill buttons for voice comparison */
+function updateComparePills() {
+  const lang = els.ttsLang.value;
+  const voices = SPEAKER_MAP[lang] || [];
+  els.voicePills.innerHTML = voices.map(v =>
+    `<button class="voice-pill" data-voice="${v}">${v}</button>`
+  ).join('');
+
+  els.voicePills.querySelectorAll('.voice-pill').forEach(pill => {
+    pill.addEventListener('click', () => pill.classList.toggle('selected'));
+  });
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ *  Presets (TTS tab)
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+function renderPresets() {
+  els.ttsPresets.innerHTML = PRESETS.map(p =>
+    `<button class="preset-tag" data-value="${p.value}" title="${p.value}">${p.label}</button>`
+  ).join('');
+
+  els.ttsPresets.querySelectorAll('.preset-tag').forEach(tag => {
+    tag.addEventListener('click', () => {
+      const wasActive = tag.classList.contains('active');
+      els.ttsPresets.querySelectorAll('.preset-tag').forEach(t => t.classList.remove('active'));
+      if (!wasActive) {
+        tag.classList.add('active');
+        els.ttsInstructions.value = tag.dataset.value;
+      } else {
+        els.ttsInstructions.value = '';
+      }
+    });
+  });
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ *  API Call — TTS
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * Call /v1/audio/speech and return { url, blob, duration, procTime, rtf }.
+ */
+async function callTTS(text, voice, language, instructions, speed, signal, { temperature, exaggeration } = {}) {
+  const body = {
+    input: text,
+    voice,
+    language,
+    instructions: instructions || '',
+    speed,
+    response_format: 'wav',
+  };
+  if (temperature != null) body.temperature = temperature;
+  if (exaggeration != null) body.exaggeration = exaggeration;
+
+  const res = await fetch('/v1/audio/speech', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    signal,
+  });
+
+  if (!res.ok) {
+    const errText = await res.text().catch(() => res.statusText);
+    throw new Error(`Generation failed (${res.status}): ${errText}`);
+  }
+
+  const duration  = res.headers.get('X-Audio-Duration')    || '?';
+  const procTime  = res.headers.get('X-Processing-Time')   || '?';
+  const rtf       = res.headers.get('X-Realtime-Factor')   || '?';
+  const blob = await res.blob();
+  const url  = URL.createObjectURL(blob);
+
+  return { url, blob, duration, procTime, rtf };
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ *  Single Generation (TTS tab)
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+async function handleGenerate() {
+  if (state.generating || state.comparing || state.cloning) return;
+
+  const text = els.ttsText.value.trim();
+  if (!text) { showToast('Please enter some text.', 'error'); return; }
+
+  const voice        = els.ttsVoice.value;
+  const language     = els.ttsLang.value;
+  const instructions = els.ttsInstructions.value.trim();
+  const speed        = parseFloat(els.ttsSpeed.value);
+  const tempVal      = parseFloat(els.ttsTemperature.value);
+  const temperature  = tempVal === 0 ? null : tempVal;
+  const exagVal      = parseFloat(els.ttsExaggeration.value);
+  const exaggeration = els.ttsExaggerationWrap.classList.contains('hidden') ? null : exagVal;
+
+  state.generating = true;
+  state.abortController = new AbortController();
+  setTtsLoading(true);
+
+  try {
+    const result = await callTTS(text, voice, language, instructions, speed, state.abortController.signal, { temperature, exaggeration });
+
+    stopCurrentAudio();
+    state.currentAudio = new Audio(result.url);
+    state.currentAudio.addEventListener('ended', onAudioEnded);
+    state.currentAudio.addEventListener('timeupdate', updatePlayerProgress);
+
+    await decodeAndDrawWaveform(result.blob);
+
+    els.playerCard.classList.remove('hidden');
+    els.playBtn.innerHTML = '&#9654;';
+    els.progressFill.style.width = '0%';
+    els.timeDisplay.textContent = `0:00 / ${formatDuration(parseFloat(result.duration))}`;
+    els.statsBar.innerHTML = `
+      <div class="stat-item">Duration: <span>${parseFloat(result.duration).toFixed(2)}s</span></div>
+      <div class="stat-item">Processing: <span>${parseFloat(result.procTime).toFixed(2)}s</span></div>
+      <div class="stat-item">RTF: <span>${parseFloat(result.rtf).toFixed(2)}x</span></div>
+    `;
+
+    state.currentAudio.play();
+    els.playBtn.innerHTML = '&#9646;&#9646;';
+    startWaveformAnimation();
+
+    addHistoryEntry({ text, voice, language, instructions, speed, ...result });
+    showToast('Audio generated successfully.', 'success');
+
+  } catch (e) {
+    if (e.name === 'AbortError') return;
+    showToast(e.message, 'error');
+  } finally {
+    state.generating = false;
+    state.abortController = null;
+    setTtsLoading(false);
+  }
+}
+
+function setTtsLoading(loading) {
+  els.ttsGenerateBtn.disabled = loading;
+  els.ttsGenerateLabel.innerHTML = loading
+    ? '<span class="spinner"></span> Generating...'
+    : 'Generate Speech';
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ *  Voice Comparison (TTS tab)
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+function toggleComparePanel() {
+  const panel = els.comparePanel;
+  const isHidden = panel.classList.contains('hidden');
+  panel.classList.toggle('hidden');
+  els.compareToggle.textContent = isHidden ? 'Hide Comparison' : 'Compare Voices';
+}
+
+async function handleCompare() {
+  if (state.generating || state.comparing || state.cloning) return;
+
+  const selectedPills = els.voicePills.querySelectorAll('.voice-pill.selected');
+  const voices = Array.from(selectedPills).map(p => p.dataset.voice);
+  if (voices.length < 2) {
+    showToast('Select at least 2 voices to compare.', 'error');
+    return;
+  }
+
+  const text         = els.ttsText.value.trim();
+  if (!text) { showToast('Please enter some text.', 'error'); return; }
+
+  const language     = els.ttsLang.value;
+  const instructions = els.ttsInstructions.value.trim();
+  const speed        = parseFloat(els.ttsSpeed.value);
+  const tempVal      = parseFloat(els.ttsTemperature.value);
+  const temperature  = tempVal === 0 ? null : tempVal;
+  const exagVal      = parseFloat(els.ttsExaggeration.value);
+  const exaggeration = els.ttsExaggerationWrap.classList.contains('hidden') ? null : exagVal;
+
+  state.comparing = true;
+  state.abortController = new AbortController();
+  stopCompareAudios();
+
+  els.comparisonCard.classList.remove('hidden');
+  els.comparisonList.innerHTML = '';
+  els.compareBtn.disabled = true;
+  els.ttsGenerateBtn.disabled = true;
+
+  const results = [];
+
+  for (let i = 0; i < voices.length; i++) {
+    const voice = voices[i];
+    els.compareLabel.innerHTML = `<span class="spinner"></span> Generating ${i + 1}/${voices.length} (${voice})...`;
+
+    try {
+      const result = await callTTS(text, voice, language, instructions, speed, state.abortController.signal, { temperature, exaggeration });
+      results.push({ voice, ...result });
+      appendCompareItem({ voice, ...result }, results.length - 1);
+      addHistoryEntry({ text, voice, language, instructions, speed, ...result });
+    } catch (e) {
+      if (e.name === 'AbortError') break;
+      appendCompareItemError(voice, e.message);
+    }
+  }
+
+  state.comparing = false;
+  state.abortController = null;
+  els.compareBtn.disabled = false;
+  els.ttsGenerateBtn.disabled = false;
+  els.compareLabel.textContent = 'Generate Comparison';
+  if (results.length > 0) showToast(`Comparison complete: ${results.length} voices generated.`, 'success');
+}
+
+/** Render a single comparison result row */
+function appendCompareItem(result, index) {
+  const audio = new Audio(result.url);
+  state.compareAudios.push(audio);
+
+  const item = document.createElement('div');
+  item.className = 'compare-item';
+  item.innerHTML = `
+    <span class="compare-voice">${result.voice}</span>
+    <button class="compare-play-btn" data-idx="${index}">&#9654;</button>
+    <div class="compare-progress"><div class="compare-progress-fill" data-idx="${index}"></div></div>
+    <span class="compare-stats">${parseFloat(result.duration).toFixed(1)}s / ${parseFloat(result.procTime).toFixed(1)}s</span>
+    <button class="compare-download" data-idx="${index}" title="Download">&#8615;</button>
+  `;
+  els.comparisonList.appendChild(item);
+
+  const playBtn = item.querySelector('.compare-play-btn');
+  playBtn.addEventListener('click', () => {
+    state.compareAudios.forEach((a, i) => {
+      if (i !== index && !a.paused) { a.pause(); updateComparePlayBtn(i, false); }
+    });
+    if (audio.paused) { audio.play(); updateComparePlayBtn(index, true); }
+    else              { audio.pause(); updateComparePlayBtn(index, false); }
+  });
+
+  audio.addEventListener('timeupdate', () => {
+    const fill = item.querySelector('.compare-progress-fill');
+    if (audio.duration) fill.style.width = (audio.currentTime / audio.duration * 100) + '%';
+  });
+  audio.addEventListener('ended', () => {
+    updateComparePlayBtn(index, false);
+    const fill = item.querySelector('.compare-progress-fill');
+    fill.style.width = '0%';
+  });
+
+  const dlBtn = item.querySelector('.compare-download');
+  dlBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    downloadBlob(result.blob, `tts_${result.voice}.wav`);
+  });
+}
+
+function appendCompareItemError(voice, message) {
+  const item = document.createElement('div');
+  item.className = 'compare-item';
+  item.style.borderColor = 'var(--error)';
+  item.innerHTML = `
+    <span class="compare-voice">${voice}</span>
+    <span style="color:var(--error);font-size:12px;flex:1">Failed: ${message}</span>
+  `;
+  els.comparisonList.appendChild(item);
+}
+
+function updateComparePlayBtn(index, playing) {
+  const btn = els.comparisonList.querySelector(`.compare-play-btn[data-idx="${index}"]`);
+  if (btn) btn.innerHTML = playing ? '&#9646;&#9646;' : '&#9654;';
+}
+
+function stopCompareAudios() {
+  state.compareAudios.forEach(a => { a.pause(); a.src = ''; });
+  state.compareAudios = [];
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ *  Main Player Controls (shared)
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+function togglePlay() {
+  if (!state.currentAudio) return;
+  if (state.currentAudio.paused) {
+    state.currentAudio.play();
+    els.playBtn.innerHTML = '&#9646;&#9646;';
+    startWaveformAnimation();
+  } else {
+    state.currentAudio.pause();
+    els.playBtn.innerHTML = '&#9654;';
+    cancelAnimationFrame(state.animFrame);
+  }
+}
+
+function seekAudio(e) {
+  if (!state.currentAudio || !state.currentAudio.duration) return;
+  const rect = els.progressWrap.getBoundingClientRect();
+  const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+  state.currentAudio.currentTime = ratio * state.currentAudio.duration;
+}
+
+function updatePlayerProgress() {
+  const audio = state.currentAudio;
+  if (!audio || !audio.duration) return;
+  const pct = (audio.currentTime / audio.duration) * 100;
+  els.progressFill.style.width = pct + '%';
+  els.timeDisplay.textContent = `${formatDuration(audio.currentTime)} / ${formatDuration(audio.duration)}`;
+}
+
+function onAudioEnded() {
+  els.playBtn.innerHTML = '&#9654;';
+  cancelAnimationFrame(state.animFrame);
+  if (state.audioBuffer) drawWaveform(state.audioBuffer, 0);
+}
+
+function stopCurrentAudio() {
+  if (state.currentAudio) {
+    state.currentAudio.pause();
+    state.currentAudio.removeEventListener('ended', onAudioEnded);
+    state.currentAudio.removeEventListener('timeupdate', updatePlayerProgress);
+  }
+  cancelAnimationFrame(state.animFrame);
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ *  Waveform Visualization (shared)
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+async function decodeAndDrawWaveform(blob) {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const arrayBuffer = await blob.arrayBuffer();
+    state.audioBuffer = await ctx.decodeAudioData(arrayBuffer);
+    drawWaveform(state.audioBuffer, 0);
+    ctx.close();
+  } catch {
+    state.audioBuffer = null;
+    const canvas = els.waveformCanvas;
+    const c = canvas.getContext('2d');
+    c.clearRect(0, 0, canvas.width, canvas.height);
+  }
+}
+
+function drawWaveform(audioBuffer, progress) {
+  const canvas = els.waveformCanvas;
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.clientWidth;
+  const h = canvas.clientHeight;
+  canvas.width = w * dpr;
+  canvas.height = h * dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+
+  const data = audioBuffer.getChannelData(0);
+  const barW = 3;
+  const gap = 2;
+  const numBars = Math.floor(w / (barW + gap));
+  const samplesPerBar = Math.floor(data.length / numBars);
+  const centerY = h / 2;
+
+  const rms = new Float32Array(numBars);
+  let maxRms = 0;
+  for (let i = 0; i < numBars; i++) {
+    let sum = 0;
+    const start = i * samplesPerBar;
+    for (let j = 0; j < samplesPerBar && (start + j) < data.length; j++) {
+      const v = data[start + j];
+      sum += v * v;
+    }
+    rms[i] = Math.sqrt(sum / samplesPerBar);
+    if (rms[i] > maxRms) maxRms = rms[i];
+  }
+  if (maxRms === 0) maxRms = 1;
+
+  ctx.clearRect(0, 0, w, h);
+
+  for (let i = 0; i < numBars; i++) {
+    const barH = Math.max(2, (rms[i] / maxRms) * (h * 0.8));
+    const x = i * (barW + gap);
+    const played = progress > 0 && (i / numBars) <= progress;
+    ctx.fillStyle = played ? '#8b5cf6' : '#30363d';
+    ctx.beginPath();
+    ctx.roundRect(x, centerY - barH / 2, barW, barH, 1);
+    ctx.fill();
+  }
+}
+
+function startWaveformAnimation() {
+  cancelAnimationFrame(state.animFrame);
+  const animate = () => {
+    if (!state.currentAudio || state.currentAudio.paused) return;
+    if (state.audioBuffer && state.currentAudio.duration) {
+      drawWaveform(state.audioBuffer, state.currentAudio.currentTime / state.currentAudio.duration);
+    }
+    state.animFrame = requestAnimationFrame(animate);
+  };
+  state.animFrame = requestAnimationFrame(animate);
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ *  History Management (shared)
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+function addHistoryEntry(entry) {
+  state.history.unshift({
+    id: Date.now(),
+    text: entry.text,
+    voice: entry.voice,
+    language: entry.language,
+    instructions: entry.instructions,
+    speed: entry.speed,
+    url: entry.url,
+    blob: entry.blob,
+    duration: entry.duration,
+    procTime: entry.procTime,
+    rtf: entry.rtf,
+    ts: new Date(),
+  });
+  renderHistory();
+}
+
+function renderHistory() {
+  if (state.history.length === 0) {
+    els.historyList.innerHTML = '<div class="empty-state">No generations yet<br><span style="font-size:12px;margin-top:4px;display:inline-block">Enter text on the left and click Generate to start</span></div>';
+    return;
+  }
+
+  els.historyList.innerHTML = state.history.map((h, i) => `
+    <div class="history-item" data-idx="${i}">
+      <button class="history-play" data-idx="${i}" title="Play">&#9654;</button>
+      <div class="history-info">
+        <div class="history-text">${escapeHtml(h.text.slice(0, 60))}${h.text.length > 60 ? '...' : ''}</div>
+        <div class="history-meta">${h.voice} &middot; ${h.language} &middot; ${parseFloat(h.duration).toFixed(1)}s &middot; ${formatTime(h.ts)}</div>
+      </div>
+      <button class="history-download" data-idx="${i}" title="Download">&#8615;</button>
+    </div>
+  `).join('');
+
+  els.historyList.querySelectorAll('.history-play').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      playHistoryEntry(state.history[parseInt(btn.dataset.idx)]);
+    });
+  });
+
+  els.historyList.querySelectorAll('.history-download').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const entry = state.history[parseInt(btn.dataset.idx)];
+      downloadBlob(entry.blob, `tts_${entry.voice}_${entry.id}.wav`);
+    });
+  });
+}
+
+function playHistoryEntry(entry) {
+  stopCurrentAudio();
+
+  state.currentAudio = new Audio(entry.url);
+  state.currentAudio.addEventListener('ended', onAudioEnded);
+  state.currentAudio.addEventListener('timeupdate', updatePlayerProgress);
+
+  decodeAndDrawWaveform(entry.blob);
+
+  els.playerCard.classList.remove('hidden');
+  els.playBtn.innerHTML = '&#9646;&#9646;';
+  els.progressFill.style.width = '0%';
+  els.timeDisplay.textContent = `0:00 / ${formatDuration(parseFloat(entry.duration))}`;
+  els.statsBar.innerHTML = `
+    <div class="stat-item">Duration: <span>${parseFloat(entry.duration).toFixed(2)}s</span></div>
+    <div class="stat-item">Processing: <span>${parseFloat(entry.procTime).toFixed(2)}s</span></div>
+    <div class="stat-item">RTF: <span>${parseFloat(entry.rtf).toFixed(2)}x</span></div>
+  `;
+
+  state.currentAudio.play();
+  startWaveformAnimation();
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ *  Health Check
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+async function checkHealth() {
+  try {
+    const res = await fetch('/health');
+    const data = await res.json();
+    if (data.status === 'ok' && data.model_loaded) {
+      els.healthDot.className = 'health-dot ok';
+      els.healthText.textContent = 'Ready';
+      // Show model short name if available, otherwise strip repo prefix
+      const modelId = data.model_id || '';
+      const shortName = state.currentModel || modelId.replace(/^mlx-community\//, '').replace(/^prince-canuma\//, '');
+      els.healthModel.textContent = shortName ? `(${shortName})` : '';
+    } else {
+      els.healthDot.className = 'health-dot err';
+      els.healthText.textContent = 'Model loading...';
+      els.healthModel.textContent = '';
+      setTimeout(checkHealth, 5000);
+    }
+
+    // Update clone availability from server config
+    state.cloneEnabled = !!data.clone_enabled;
+    state.urlExtractors = data.url_extractors || [];
+    updateCloneUI();
+  } catch {
+    els.healthDot.className = 'health-dot err';
+    els.healthText.textContent = 'Server offline';
+    els.healthModel.textContent = '';
+    setTimeout(checkHealth, 10000);
+  }
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ *  Model Info — fetch available models and adapt UI
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+async function fetchModelInfo() {
+  try {
+    const res = await fetch('/v1/models');
+    if (!res.ok) return;
+    const data = await res.json();
+    state.currentModel = data.current_model;
+    if (data.current_model && data.models[data.current_model]) {
+      state.modelInfo = data.models[data.current_model];
+    }
+    updateModelUI();
+  } catch {
+    // Server may not support this endpoint yet — use defaults
+  }
+}
+
+/** Adapt the UI controls based on the currently loaded model's features. */
+function updateModelUI() {
+  if (!state.modelInfo) return;
+
+  const features = state.modelInfo.features || [];
+  const params = state.modelInfo.parameters || {};
+
+  // Show/hide instructions card based on 'instruct' feature
+  const hasInstruct = features.includes('instruct') || features.includes('voice_design');
+  els.ttsInstructionsCard.classList.toggle('hidden', !hasInstruct);
+
+  // Show/hide exaggeration slider
+  const hasExag = !!params.exaggeration;
+  els.ttsExaggerationWrap.classList.toggle('hidden', !hasExag);
+
+  // Update voice dropdown with model-specific voices
+  populateVoices();
+  updateComparePills();
+
+  // Hide language selector if model has only _all voices (not language-specific)
+  const voices = state.modelInfo.voices || {};
+  const hasLangVoices = Object.keys(voices).some(k => k !== '_all');
+  const langSelect = els.ttsLang.closest('.row');
+  if (!hasLangVoices && Object.keys(voices).length > 0) {
+    // Model has voices but not per-language — hide language, show voice only
+    els.ttsLang.closest('div').style.display = 'none';
+  } else {
+    els.ttsLang.closest('div').style.display = '';
+  }
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ *  Utilities
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+function formatDuration(sec) {
+  if (isNaN(sec)) return '0:00';
+  const m = Math.floor(sec / 60);
+  const s = Math.floor(sec % 60);
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+function formatTime(date) {
+  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+function downloadBlob(blob, filename) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
+function showToast(message, type = 'info') {
+  const container = document.getElementById('toast-container');
+  const toast = document.createElement('div');
+  toast.className = `toast toast-${type}`;
+  toast.textContent = message;
+  container.appendChild(toast);
+  requestAnimationFrame(() => toast.classList.add('show'));
+  setTimeout(() => {
+    toast.classList.remove('show');
+    setTimeout(() => toast.remove(), 300);
+  }, 3000);
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ *  Voice Clone — UI State
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+/** Show/hide clone UI based on server config + update URL hint */
+function updateCloneUI() {
+  if (!state.cloneEnabled) {
+    els.cloneContent.classList.add('hidden');
+    els.cloneDisabledMsg.classList.remove('hidden');
+    return;
+  }
+
+  // Update URL hint based on available extractors
+  const extractors = state.urlExtractors;
+  if (extractors.includes('yt-dlp')) {
+    els.cloneUrlHint.textContent = 'Supports YouTube, Bilibili, and direct audio links (.mp3, .wav, etc.)';
+  } else if (extractors.includes('http')) {
+    els.cloneUrlHint.textContent = 'Supports direct audio links (.mp3, .wav, etc.) — install yt-dlp for YouTube/Bilibili';
+  } else {
+    els.cloneUrlHint.textContent = 'URL download not available';
+  }
+}
+
+/** Enable/disable the clone generate button */
+function updateCloneButton() {
+  const hasRef = !!state.selectedRefId;
+  els.cloneGenerateBtn.disabled = !hasRef;
+  els.cloneNotice.textContent = hasRef
+    ? 'Enter text above, then click to generate with the cloned voice.'
+    : 'Select a reference audio above, then enter text.';
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ *  Voice Clone — URL Download
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+async function handleUrlDownload() {
+  if (state.downloading) return;
+
+  const url = els.cloneUrl.value.trim();
+  if (!url) { showToast('Please paste a URL.', 'error'); return; }
+
+  state.downloading = true;
+  els.cloneUrlBtn.disabled = true;
+  els.cloneUrlLabel.innerHTML = '<span class="spinner"></span>';
+
+  try {
+    const res = await fetch('/v1/audio/references/from-url', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new Error(err.detail || `Download failed (${res.status})`);
+    }
+
+    const data = await res.json();
+    showToast(`Reference downloaded: ${data.original_name}`, 'success');
+    els.cloneUrl.value = '';
+
+    // Reload references and auto-select the new one
+    await loadReferences();
+    state.selectedRefId = data.ref_id;
+    renderReferences();
+    updateCloneButton();
+
+  } catch (e) {
+    showToast(e.message, 'error');
+  } finally {
+    state.downloading = false;
+    els.cloneUrlBtn.disabled = false;
+    els.cloneUrlLabel.textContent = 'Download';
+  }
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ *  Voice Clone — File Upload (drag & drop)
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+function onDragOver(e) {
+  e.preventDefault();
+  els.dropZone.classList.add('dragover');
+}
+
+function onDragLeave() {
+  els.dropZone.classList.remove('dragover');
+}
+
+function onDrop(e) {
+  e.preventDefault();
+  els.dropZone.classList.remove('dragover');
+  const file = e.dataTransfer.files[0];
+  if (file) uploadReferenceFile(file);
+}
+
+function onFileSelected() {
+  const file = els.refFileInput.files[0];
+  if (file) uploadReferenceFile(file);
+  els.refFileInput.value = '';
+}
+
+async function uploadReferenceFile(file) {
+  const allowedExts = ['.wav', '.mp3', '.flac', '.m4a', '.ogg', '.webm', '.aac'];
+  const ext = '.' + file.name.split('.').pop().toLowerCase();
+  if (!allowedExts.includes(ext)) {
+    showToast(`Unsupported format. Use: ${allowedExts.join(', ')}`, 'error');
+    return;
+  }
+  if (file.size > 50 * 1024 * 1024) {
+    showToast('File too large (max 50MB)', 'error');
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const origHTML = els.dropZone.innerHTML;
+  els.dropZone.innerHTML = '<span class="spinner"></span> Uploading...';
+
+  try {
+    const res = await fetch('/v1/audio/references/upload', { method: 'POST', body: formData });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new Error(err.detail || `Upload failed (${res.status})`);
+    }
+    const data = await res.json();
+    showToast(`Reference uploaded: ${data.original_name}`, 'success');
+    await loadReferences();
+    state.selectedRefId = data.ref_id;
+    renderReferences();
+    updateCloneButton();
+  } catch (e) {
+    showToast(e.message, 'error');
+  } finally {
+    els.dropZone.innerHTML = origHTML;
+  }
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ *  Voice Clone — Reference List
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+async function loadReferences() {
+  try {
+    const res = await fetch('/v1/audio/references');
+    if (!res.ok) return;
+    const data = await res.json();
+    state.references = data.references || [];
+  } catch {
+    state.references = [];
+  }
+  renderReferences();
+  updateCloneButton();
+}
+
+function renderReferences() {
+  if (state.references.length === 0) {
+    els.refList.innerHTML = '<div style="color:var(--text-tertiary);font-size:12px;padding:8px 0">No reference audio yet. Upload a file or download from URL.</div>';
+    return;
+  }
+
+  els.refList.innerHTML = state.references.map(ref => {
+    const isTrimOpen = state.trimEditorRefId === ref.ref_id;
+    return `
+    <div class="ref-item ${ref.ref_id === state.selectedRefId ? 'selected' : ''} ${isTrimOpen ? 'trim-open' : ''}" data-ref-id="${ref.ref_id}">
+      <button class="ref-item-play" data-ref-id="${ref.ref_id}" title="Preview">&#9654;</button>
+      <span class="ref-item-name" title="${escapeHtml(ref.original_name)}">${escapeHtml(ref.original_name)}</span>
+      <span class="ref-item-dur">${ref.duration ? ref.duration.toFixed(1) + 's' : ''}</span>
+      <button class="ref-item-trim" data-ref-id="${ref.ref_id}" title="Trim audio">&#9986;</button>
+      <button class="ref-item-del" data-ref-id="${ref.ref_id}" title="Delete">&times;</button>
+    </div>
+    ${isTrimOpen ? '<div class="trim-editor" id="trim-editor-panel"></div>' : ''}`;
+  }).join('');
+
+  // Click to select/deselect
+  els.refList.querySelectorAll('.ref-item').forEach(item => {
+    item.addEventListener('click', (e) => {
+      if (e.target.closest('.ref-item-play') || e.target.closest('.ref-item-del') || e.target.closest('.ref-item-trim')) return;
+      const refId = item.dataset.refId;
+      state.selectedRefId = (state.selectedRefId === refId) ? null : refId;
+      renderReferences();
+      updateCloneButton();
+    });
+  });
+
+  // Play preview
+  els.refList.querySelectorAll('.ref-item-play').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      previewReference(btn.dataset.refId);
+    });
+  });
+
+  // Delete
+  els.refList.querySelectorAll('.ref-item-del').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      deleteReference(btn.dataset.refId);
+    });
+  });
+
+  // Trim — toggle the inline trim editor
+  els.refList.querySelectorAll('.ref-item-trim').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const refId = btn.dataset.refId;
+      if (state.trimEditorRefId === refId) {
+        closeTrimEditor();
+      } else {
+        openTrimEditor(refId);
+      }
+    });
+  });
+
+  // If trim editor is open, populate its DOM content now that the placeholder exists
+  if (state.trimEditorRefId && state.trimAudioBuffer) {
+    _initTrimEditorDOM();
+  }
+}
+
+function previewReference(refId) {
+  if (state.refAudio) { state.refAudio.pause(); state.refAudio = null; }
+
+  state.refAudio = new Audio(`/v1/audio/references/${refId}/play`);
+  state.refAudio.play();
+
+  const btn = els.refList.querySelector(`.ref-item-play[data-ref-id="${refId}"]`);
+  if (btn) btn.innerHTML = '&#9646;&#9646;';
+  state.refAudio.addEventListener('ended', () => {
+    if (btn) btn.innerHTML = '&#9654;';
+    state.refAudio = null;
+  });
+}
+
+async function deleteReference(refId) {
+  try {
+    const res = await fetch(`/v1/audio/references/${refId}`, { method: 'DELETE' });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new Error(err.detail || `Delete failed (${res.status})`);
+    }
+    if (state.selectedRefId === refId) state.selectedRefId = null;
+    if (state.trimEditorRefId === refId) closeTrimEditor();
+    showToast('Reference deleted.', 'info');
+    await loadReferences();
+  } catch (e) {
+    showToast(e.message, 'error');
+  }
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ *  Inline Trim Editor
+ *  Allows users to visually select a region of a reference audio and trim it.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * Open the trim editor for a specific reference audio.
+ * Fetches the WAV, decodes it, then re-renders references to inject the editor DOM.
+ */
+async function openTrimEditor(refId) {
+  // Close any existing editor first (stops preview, resets state)
+  stopTrimPreview();
+
+  state.trimEditorRefId = refId;
+  state.trimAudioBuffer = null;
+  state.trimStart = 0;
+  state.trimEnd = 1;
+  state.trimDragging = null;
+
+  // Re-render to show the editor placeholder, then populate it after audio loads
+  renderReferences();
+
+  try {
+    const res = await fetch(`/v1/audio/references/${refId}/play`);
+    if (!res.ok) throw new Error('Failed to fetch audio');
+    const arrayBuffer = await res.arrayBuffer();
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    state.trimAudioBuffer = await ctx.decodeAudioData(arrayBuffer);
+    ctx.close();
+
+    // If user closed the editor while we were loading, bail out
+    if (state.trimEditorRefId !== refId) return;
+
+    _initTrimEditorDOM();
+  } catch (e) {
+    showToast(`Failed to load audio for trimming: ${e.message}`, 'error');
+    closeTrimEditor();
+  }
+}
+
+/**
+ * Close the trim editor, stop any preview, and reset all trim state.
+ */
+function closeTrimEditor() {
+  stopTrimPreview();
+  state.trimEditorRefId = null;
+  state.trimAudioBuffer = null;
+  state.trimStart = 0;
+  state.trimEnd = 1;
+  state.trimDragging = null;
+  renderReferences();
+}
+
+/**
+ * Populate the trim editor panel DOM (canvas, handles, times, buttons).
+ * Called after both the placeholder div exists and the audio buffer is decoded.
+ */
+function _initTrimEditorDOM() {
+  const panel = document.getElementById('trim-editor-panel');
+  if (!panel || !state.trimAudioBuffer) return;
+
+  panel.innerHTML = `
+    <div class="trim-waveform-wrap" id="trim-waveform-wrap">
+      <canvas class="trim-waveform-canvas" id="trim-waveform-canvas"></canvas>
+      <div class="trim-handle trim-handle-start" id="trim-handle-start"></div>
+      <div class="trim-handle trim-handle-end" id="trim-handle-end"></div>
+    </div>
+    <div class="trim-times">
+      <span id="trim-time-start">0.0s</span>
+      <span class="trim-duration" id="trim-time-duration">Duration: 0.0s</span>
+      <span id="trim-time-end">0.0s</span>
+    </div>
+    <div class="trim-actions">
+      <button class="trim-btn-preview" id="trim-btn-preview">&#9654; Preview</button>
+      <button class="trim-btn-apply" id="trim-btn-apply">&#9986; Apply Trim</button>
+    </div>
+  `;
+
+  drawTrimWaveform();
+  updateTrimTimeLabels();
+  setupTrimHandleDrag();
+
+  // Preview button — play only the selected region via Web Audio API
+  document.getElementById('trim-btn-preview').addEventListener('click', () => {
+    if (state.trimPreviewSource) {
+      stopTrimPreview();
+    } else {
+      previewTrimmedRegion();
+    }
+  });
+
+  // Apply Trim button — POST to backend, then refresh
+  document.getElementById('trim-btn-apply').addEventListener('click', () => {
+    applyTrim(state.trimEditorRefId);
+  });
+}
+
+/**
+ * Draw the waveform on the trim canvas.
+ * Bars inside the [trimStart, trimEnd] selection are accent-colored;
+ * bars outside are dimmed. Boundary lines mark the handles.
+ */
+function drawTrimWaveform() {
+  const canvas = document.getElementById('trim-waveform-canvas');
+  if (!canvas || !state.trimAudioBuffer) return;
+
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.clientWidth;
+  const h = canvas.clientHeight;
+  canvas.width = w * dpr;
+  canvas.height = h * dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+
+  const data = state.trimAudioBuffer.getChannelData(0);
+  const barW = 3;
+  const gap = 2;
+  const numBars = Math.floor(w / (barW + gap));
+  const samplesPerBar = Math.floor(data.length / numBars);
+  const centerY = h / 2;
+
+  // Compute RMS per bar
+  const rms = new Float32Array(numBars);
+  let maxRms = 0;
+  for (let i = 0; i < numBars; i++) {
+    let sum = 0;
+    const start = i * samplesPerBar;
+    for (let j = 0; j < samplesPerBar && (start + j) < data.length; j++) {
+      const v = data[start + j];
+      sum += v * v;
+    }
+    rms[i] = Math.sqrt(sum / samplesPerBar);
+    if (rms[i] > maxRms) maxRms = rms[i];
+  }
+  if (maxRms === 0) maxRms = 1;
+
+  ctx.clearRect(0, 0, w, h);
+
+  // Draw bars: selected region in accent, outside in dimmed gray
+  for (let i = 0; i < numBars; i++) {
+    const barH = Math.max(2, (rms[i] / maxRms) * (h * 0.8));
+    const x = i * (barW + gap);
+    const norm = i / numBars;
+    const inSelection = norm >= state.trimStart && norm <= state.trimEnd;
+    ctx.fillStyle = inSelection ? '#8b5cf6' : 'rgba(48, 54, 61, 0.5)';
+    ctx.beginPath();
+    ctx.roundRect(x, centerY - barH / 2, barW, barH, 1);
+    ctx.fill();
+  }
+
+  // Draw selection boundary lines
+  const startX = state.trimStart * w;
+  const endX = state.trimEnd * w;
+  ctx.strokeStyle = 'rgba(139, 92, 246, 0.7)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(startX, 0); ctx.lineTo(startX, h);
+  ctx.moveTo(endX, 0);   ctx.lineTo(endX, h);
+  ctx.stroke();
+
+  // Position the CSS handles to match the selection bounds
+  const handleStart = document.getElementById('trim-handle-start');
+  const handleEnd = document.getElementById('trim-handle-end');
+  if (handleStart) handleStart.style.left = `${startX - 3}px`;
+  if (handleEnd) handleEnd.style.left = `${endX - 3}px`;
+}
+
+/**
+ * Set up pointer-based drag interaction for the start/end trim handles.
+ * Also: clicking the waveform moves the nearest handle to that position.
+ */
+function setupTrimHandleDrag() {
+  const wrap = document.getElementById('trim-waveform-wrap');
+  const handleStart = document.getElementById('trim-handle-start');
+  const handleEnd = document.getElementById('trim-handle-end');
+  if (!wrap || !handleStart || !handleEnd) return;
+
+  const duration = state.trimAudioBuffer ? state.trimAudioBuffer.duration : 1;
+  // Minimum gap between handles in normalized units (0.5s worth)
+  const minGap = Math.min(0.5 / duration, 0.9);
+
+  function getNorm(e) {
+    const rect = wrap.getBoundingClientRect();
+    return Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+  }
+
+  // Handle drag: start handle
+  function startDrag(which) {
+    return (e) => {
+      e.preventDefault();
+      state.trimDragging = which;
+      const handle = which === 'start' ? handleStart : handleEnd;
+      handle.classList.add('dragging');
+
+      const onMove = (ev) => {
+        const norm = getNorm(ev);
+        if (which === 'start') {
+          state.trimStart = Math.min(norm, state.trimEnd - minGap);
+        } else {
+          state.trimEnd = Math.max(norm, state.trimStart + minGap);
+        }
+        // Clamp to [0, 1]
+        state.trimStart = Math.max(0, state.trimStart);
+        state.trimEnd = Math.min(1, state.trimEnd);
+        drawTrimWaveform();
+        updateTrimTimeLabels();
+      };
+
+      const onUp = () => {
+        state.trimDragging = null;
+        handle.classList.remove('dragging');
+        document.removeEventListener('pointermove', onMove);
+        document.removeEventListener('pointerup', onUp);
+      };
+
+      document.addEventListener('pointermove', onMove);
+      document.addEventListener('pointerup', onUp);
+    };
+  }
+
+  handleStart.addEventListener('pointerdown', startDrag('start'));
+  handleEnd.addEventListener('pointerdown', startDrag('end'));
+
+  // Click on the waveform area (not on a handle) moves the nearest handle
+  wrap.addEventListener('click', (e) => {
+    if (e.target.classList.contains('trim-handle') || e.target.closest('.trim-handle')) return;
+    const norm = getNorm(e);
+    const distStart = Math.abs(norm - state.trimStart);
+    const distEnd = Math.abs(norm - state.trimEnd);
+    if (distStart <= distEnd) {
+      state.trimStart = Math.min(norm, state.trimEnd - minGap);
+    } else {
+      state.trimEnd = Math.max(norm, state.trimStart + minGap);
+    }
+    state.trimStart = Math.max(0, state.trimStart);
+    state.trimEnd = Math.min(1, state.trimEnd);
+    drawTrimWaveform();
+    updateTrimTimeLabels();
+  });
+}
+
+/**
+ * Update the time labels under the waveform: start, end, and duration.
+ */
+function updateTrimTimeLabels() {
+  const duration = state.trimAudioBuffer ? state.trimAudioBuffer.duration : 0;
+  const startSec = state.trimStart * duration;
+  const endSec = state.trimEnd * duration;
+  const selDuration = endSec - startSec;
+
+  const elStart = document.getElementById('trim-time-start');
+  const elEnd = document.getElementById('trim-time-end');
+  const elDur = document.getElementById('trim-time-duration');
+  if (elStart) elStart.textContent = `${startSec.toFixed(1)}s`;
+  if (elEnd) elEnd.textContent = `${endSec.toFixed(1)}s`;
+  if (elDur) elDur.textContent = `Duration: ${selDuration.toFixed(1)}s`;
+}
+
+/**
+ * Preview only the trimmed region using Web Audio API.
+ * Uses source.start(0, offsetSec, durationSec) for precise sub-buffer playback.
+ */
+function previewTrimmedRegion() {
+  stopTrimPreview();
+  if (!state.trimAudioBuffer) return;
+
+  const duration = state.trimAudioBuffer.duration;
+  const startSec = state.trimStart * duration;
+  const endSec = state.trimEnd * duration;
+
+  const ctx = new (window.AudioContext || window.webkitAudioContext)();
+  const source = ctx.createBufferSource();
+  source.buffer = state.trimAudioBuffer;
+  source.connect(ctx.destination);
+  source.start(0, startSec, endSec - startSec);
+
+  state.trimPreviewCtx = ctx;
+  state.trimPreviewSource = source;
+
+  // Update button label while previewing
+  const btn = document.getElementById('trim-btn-preview');
+  if (btn) btn.innerHTML = '&#9646;&#9646; Stop';
+
+  source.onended = () => {
+    state.trimPreviewSource = null;
+    state.trimPreviewCtx = null;
+    if (btn) btn.innerHTML = '&#9654; Preview';
+    ctx.close();
+  };
+}
+
+/**
+ * Stop any ongoing trim preview playback.
+ */
+function stopTrimPreview() {
+  if (state.trimPreviewSource) {
+    try { state.trimPreviewSource.stop(); } catch {}
+    state.trimPreviewSource = null;
+  }
+  if (state.trimPreviewCtx) {
+    try { state.trimPreviewCtx.close(); } catch {}
+    state.trimPreviewCtx = null;
+  }
+  const btn = document.getElementById('trim-btn-preview');
+  if (btn) btn.innerHTML = '&#9654; Preview';
+}
+
+/**
+ * Apply the trim: POST [start, end] to the server, then refresh the editor.
+ */
+async function applyTrim(refId) {
+  if (!state.trimAudioBuffer || !refId) return;
+
+  const duration = state.trimAudioBuffer.duration;
+  const startSec = +(state.trimStart * duration).toFixed(3);
+  const endSec = +(state.trimEnd * duration).toFixed(3);
+
+  // Don't trim if selection covers the entire file (within a small tolerance)
+  if (startSec < 0.05 && endSec > duration - 0.05) {
+    showToast('Selection covers the entire audio — nothing to trim.', 'info');
+    return;
+  }
+
+  const applyBtn = document.getElementById('trim-btn-apply');
+  if (applyBtn) { applyBtn.disabled = true; applyBtn.textContent = 'Trimming...'; }
+
+  stopTrimPreview();
+
+  try {
+    const res = await fetch(`/v1/audio/references/${refId}/trim`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ start: startSec, end: endSec }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new Error(err.detail || `Trim failed (${res.status})`);
+    }
+    const data = await res.json();
+    showToast(`Trimmed to ${data.duration}s`, 'success');
+
+    // Refresh references list (updates duration) then re-open the editor
+    await loadReferences();
+    openTrimEditor(refId);
+  } catch (e) {
+    showToast(e.message, 'error');
+    if (applyBtn) { applyBtn.disabled = false; applyBtn.innerHTML = '&#9986; Apply Trim'; }
+  }
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ *  Voice Clone — Generation
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+async function handleClone() {
+  if (state.generating || state.comparing || state.cloning) return;
+
+  // Clone tab has its own text input
+  const text = els.cloneText.value.trim();
+  if (!text) { showToast('Please enter some text.', 'error'); return; }
+  if (!state.selectedRefId) { showToast('Please select a reference audio.', 'error'); return; }
+
+  const language = els.cloneLang.value;
+  const speed    = parseFloat(els.cloneSpeed.value);
+  const refText  = els.cloneRefText.value.trim();
+
+  state.cloning = true;
+  setCloneLoading(true);
+
+  try {
+    const res = await fetch('/v1/audio/clone', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        text,
+        ref_id: state.selectedRefId,
+        ref_text: refText || null,
+        language,
+        speed,
+        response_format: 'wav',
+      }),
+    });
+
+    if (!res.ok) {
+      const errText = await res.text().catch(() => res.statusText);
+      throw new Error(`Clone failed (${res.status}): ${errText}`);
+    }
+
+    const duration = res.headers.get('X-Audio-Duration')  || '?';
+    const procTime = res.headers.get('X-Processing-Time') || '?';
+    const rtf      = res.headers.get('X-Realtime-Factor') || '?';
+    const blob = await res.blob();
+    const url  = URL.createObjectURL(blob);
+
+    stopCurrentAudio();
+    state.currentAudio = new Audio(url);
+    state.currentAudio.addEventListener('ended', onAudioEnded);
+    state.currentAudio.addEventListener('timeupdate', updatePlayerProgress);
+
+    await decodeAndDrawWaveform(blob);
+
+    els.playerCard.classList.remove('hidden');
+    els.playBtn.innerHTML = '&#9654;';
+    els.progressFill.style.width = '0%';
+    els.timeDisplay.textContent = `0:00 / ${formatDuration(parseFloat(duration))}`;
+    els.statsBar.innerHTML = `
+      <div class="stat-item">Duration: <span>${parseFloat(duration).toFixed(2)}s</span></div>
+      <div class="stat-item">Processing: <span>${parseFloat(procTime).toFixed(2)}s</span></div>
+      <div class="stat-item">RTF: <span>${parseFloat(rtf).toFixed(2)}x</span></div>
+      <div class="stat-item" style="color:var(--success)">Clone</div>
+    `;
+
+    state.currentAudio.play();
+    els.playBtn.innerHTML = '&#9646;&#9646;';
+    startWaveformAnimation();
+
+    const refEntry = state.references.find(r => r.ref_id === state.selectedRefId);
+    const voiceName = refEntry ? `Clone(${refEntry.original_name})` : 'Clone';
+
+    addHistoryEntry({ text, voice: voiceName, language, instructions: '', speed, url, blob, duration, procTime, rtf });
+    showToast('Voice clone generated successfully.', 'success');
+
+  } catch (e) {
+    showToast(e.message, 'error');
+  } finally {
+    state.cloning = false;
+    setCloneLoading(false);
+  }
+}
+
+function setCloneLoading(loading) {
+  els.cloneGenerateBtn.disabled = loading;
+  els.ttsGenerateBtn.disabled = loading;
+  els.cloneGenerateLabel.innerHTML = loading
+    ? '<span class="spinner"></span> Cloning...'
+    : 'Generate with Clone';
+  if (loading) {
+    els.cloneNotice.textContent = 'First use requires downloading the Base model (~2GB). Please wait...';
+  } else {
+    updateCloneButton();
+  }
+}
+</script>
+</body>
+</html>
