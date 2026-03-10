@@ -28,6 +28,12 @@ dependencies = [
     "yt-dlp",
     # ── MLX backend (Apple Silicon only, auto-skipped on other platforms) ─
     "mlx-audio>=0.3.1; platform_machine == 'arm64' and sys_platform == 'darwin'",
+    # ── Pin transitive deps for compatibility (mlx-audio / vibevoice) ────
+    "librosa>=0.10.2",
+    "transformers>=4.51.3,<5",
+    "accelerate>=1.6.0",
+    "numpy>=1.26.2",
+    "numba>=0.57.0",
 ]
 
 [project.optional-dependencies]
