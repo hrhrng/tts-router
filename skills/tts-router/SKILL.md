@@ -107,3 +107,5 @@ For more complex workflows, read the relevant reference file:
 
 - **Clone a voice from any URL** (YouTube, Bilibili, podcast, direct audio link) →
   read `references/voice-cloning.md`
+- **Use tts-router as a TTS provider in OpenClaw** →
+  read `references/openclaw.md`
