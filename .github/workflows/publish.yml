@@ -35,6 +35,11 @@ jobs:
         run: npm install -g clawhub
 
       - name: Publish skill to ClawHub
-        run: clawhub publish skills/tts-router/ --version ${{ github.event.release.tag_name }}
+        run: |
+          VERSION=${{ github.event.release.tag_name }}
+          clawhub publish skills/tts-router \
+            --slug tts-router \
+            --version ${VERSION#v} \
+            --changelog "${{ github.event.release.body }}"
         env:
           CLAWHUB_AUTH: ${{ secrets.CLAWHUB_AUTH }}
