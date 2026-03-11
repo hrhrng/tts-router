@@ -180,14 +180,18 @@ class MLXBackend(TTSBackend):
             kwargs["exaggeration"] = exaggeration
 
         # ── ref_audio / ref_text (voice cloning) ──────────────────────────
+        # Call model.generate() directly to support both:
+        #  - ICL mode (ref_audio + ref_text): best quality clone
+        #  - X-vector only mode (ref_audio only): speaker embedding, no ASR needed
+        # The generate_audio() wrapper requires ref_text or a Whisper STT model,
+        # so we bypass it for voice cloning.
         if ref_audio:
-            kwargs["ref_audio"] = ref_audio
-            # Auto-transcribe if ref_text not provided.
-            # mlx-audio's built-in Whisper transcription has a bug
-            # (missing processor), so we do it ourselves.
-            if not ref_text:
-                ref_text = self._transcribe(ref_audio)
-            kwargs["ref_text"] = ref_text
+            return self._generate_clone(
+                model, text, ref_audio=ref_audio, ref_text=ref_text,
+                voice=voice if voice else (_DEFAULT_VOICES.get(family) or ""),
+                speed=speed, lang_code=lang_code, temperature=temperature,
+                output_dir=output_dir, verbose=verbose,
+            )
 
         generate_audio_fn(**kwargs)
 
@@ -197,24 +201,53 @@ class MLXBackend(TTSBackend):
         return wav_path
 
     @staticmethod
-    def _transcribe(audio_path: str) -> str:
-        """Transcribe audio using mlx-audio's Whisper.
+    def _generate_clone(
+        model: Any, text: str, *, ref_audio: str, ref_text: str | None,
+        voice: str, speed: float, lang_code: str,
+        temperature: float | None, output_dir: str, verbose: bool,
+    ) -> str:
+        """Generate audio with voice cloning via model.generate() directly.
 
-        Works around an mlx-audio bug where the MLX-converted whisper model
-        is missing preprocessor_config.json, causing processor load to fail.
-        We manually load the processor from the original HF model.
+        Two modes depending on whether ref_text is provided:
+        - ICL mode (ref_text given): full in-context learning, best quality
+        - X-vector mode (no ref_text): speaker embedding only, no Whisper needed
         """
-        from mlx_audio.stt.utils import load_model as load_stt_model
-        print("[clone] Transcribing reference audio ...", flush=True)
-        stt = load_stt_model("mlx-community/whisper-large-v3-turbo")
-        if stt._processor is None:
-            from transformers import WhisperProcessor
-            stt._processor = WhisperProcessor.from_pretrained("openai/whisper-large-v3-turbo")
-        result = stt.generate(audio_path)
-        text = result.text.strip()
-        print(f"[clone] Transcribed: {text}", flush=True)
-        del stt
-        return text
+        import numpy as np
+        import mlx.core as mx
+        from mlx_audio.audio_io import write as audio_write
+
+        gen_kwargs: dict[str, Any] = {
+            "text": text,
+            "ref_audio": ref_audio,
+            "lang_code": lang_code or "auto",
+            "verbose": verbose,
+        }
+        if ref_text:
+            gen_kwargs["ref_text"] = ref_text
+        if voice:
+            gen_kwargs["voice"] = voice
+        if speed != 1.0:
+            gen_kwargs["speed"] = speed
+        if temperature is not None:
+            gen_kwargs["temperature"] = temperature
+
+        audio_chunks = []
+        for result in model.generate(**gen_kwargs):
+            audio_chunks.append(result.audio)
+
+        if not audio_chunks:
+            raise RuntimeError("Voice clone generation produced no output")
+
+        audio = (
+            mx.concatenate(audio_chunks, axis=0)
+            if len(audio_chunks) > 1
+            else audio_chunks[0]
+        )
+
+        os.makedirs(output_dir, exist_ok=True)
+        wav_path = os.path.join(output_dir, "audio_000.wav")
+        audio_write(wav_path, np.array(audio), model.sample_rate)
+        return wav_path
 
     def available_models(self) -> dict[str, dict]:
         return dict(_MODEL_REGISTRY)

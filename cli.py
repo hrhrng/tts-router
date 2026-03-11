@@ -176,7 +176,7 @@ def say(
     speed: float = typer.Option(1.0, help="Speed multiplier 0.5–2.0"),
     instruct: str = typer.Option("", help="Emotion/style instruction, e.g. 'speak sadly'", rich_help_panel="Voice Cloning & Advanced"),
     ref_audio: str = typer.Option(None, "--ref-audio", help="Reference audio file for voice cloning", rich_help_panel="Voice Cloning & Advanced"),
-    ref_text: str = typer.Option(None, "--ref-text", help="Transcript of ref audio (auto-detected if omitted)", rich_help_panel="Voice Cloning & Advanced"),
+    ref_text: str = typer.Option(None, "--ref-text", help="Transcript of ref audio (ICL mode). Omit for x-vector mode (no ASR needed)", rich_help_panel="Voice Cloning & Advanced"),
     temperature: float = typer.Option(None, "--temperature", "-t", help="Sampling temperature (default: model-specific)", rich_help_panel="Voice Cloning & Advanced"),
     exaggeration: float = typer.Option(None, "--exaggeration", help="Emotion exaggeration 0.0–1.0 (Chatterbox only)", rich_help_panel="Voice Cloning & Advanced"),
 ):
