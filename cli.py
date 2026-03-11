@@ -124,13 +124,14 @@ def serve(
         "qwen3-tts",
         help="Primary TTS model (short name or HF repo ID)",
     ),
-    clone_model: str = typer.Option(
-        "qwen3-tts-clone",
-        help="Model used for voice cloning (short name or HF repo ID)",
-    ),
     host: str = typer.Option("0.0.0.0", help="Bind address"),
     port: int = typer.Option(8091, help="Port number"),
-    no_clone: bool = typer.Option(False, help="Disable voice cloning"),
+    no_clone: bool = typer.Option(False, "--no-clone", help="Disable voice cloning"),
+    clone_model: str = typer.Option(
+        "qwen3-tts-clone",
+        help="Override the voice cloning model (short name or HF repo ID)",
+        rich_help_panel="Advanced Options",
+    ),
 ):
     """Start the TTS API server."""
     import uvicorn
@@ -167,17 +168,17 @@ def serve(
 @app.command()
 def say(
     text: str = typer.Argument(help="Text to synthesize"),
-    output: str = typer.Option(None, "--output", "-o", help="Output file path (default: stdout)"),
+    output: str = typer.Option(None, "--output", "-o", help="Output file path (default: stdout wav)"),
+    voice: str = typer.Option("", help="Voice/speaker name (model-specific, e.g. Vivian, af_heart)"),
     model: str = typer.Option("qwen3-tts", help="Model short name or HF repo ID"),
-    voice: str = typer.Option("", help="Voice/speaker (model-specific: Vivian, af_heart, tara, …)"),
-    format: str = typer.Option(None, help="Output format: wav, mp3, flac, aac, opus (default: wav)"),
-    speed: float = typer.Option(1.0, help="Speech speed multiplier (Kokoro)"),
+    format: str = typer.Option(None, help="Output format: wav, mp3, flac, aac, opus"),
     language: str = typer.Option(None, help="Language hint (default: auto-detect)"),
-    instruct: str = typer.Option("", help="Emotion/style instruction (Qwen3)"),
-    ref_audio: str = typer.Option(None, "--ref-audio", help="Reference audio for voice cloning (WAV path)"),
-    ref_text: str = typer.Option(None, "--ref-text", help="Transcript of ref audio (auto-transcribed if omitted)"),
-    temperature: float = typer.Option(None, "--temperature", "-t", help="Sampling temperature (default: model-specific)"),
-    exaggeration: float = typer.Option(None, "--exaggeration", help="Emotion exaggeration 0.0-1.0 (Chatterbox)"),
+    speed: float = typer.Option(1.0, help="Speed multiplier 0.5–2.0"),
+    instruct: str = typer.Option("", help="Emotion/style instruction, e.g. 'speak sadly'", rich_help_panel="Voice Cloning & Advanced"),
+    ref_audio: str = typer.Option(None, "--ref-audio", help="Reference audio file for voice cloning", rich_help_panel="Voice Cloning & Advanced"),
+    ref_text: str = typer.Option(None, "--ref-text", help="Transcript of ref audio (auto-detected if omitted)", rich_help_panel="Voice Cloning & Advanced"),
+    temperature: float = typer.Option(None, "--temperature", "-t", help="Sampling temperature (default: model-specific)", rich_help_panel="Voice Cloning & Advanced"),
+    exaggeration: float = typer.Option(None, "--exaggeration", help="Emotion exaggeration 0.0–1.0 (Chatterbox only)", rich_help_panel="Voice Cloning & Advanced"),
 ):
     """Synthesize speech directly from the command line."""
     import os
