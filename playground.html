@@ -1350,6 +1350,7 @@ document.addEventListener('DOMContentLoaded', () => {
   els.cloneUrl.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') handleUrlDownload();
   });
+  els.cloneUrl.addEventListener('input', updateCloneButton);
   els.dropZone.addEventListener('click', () => els.refFileInput.click());
   els.dropZone.addEventListener('dragover', onDragOver);
   els.dropZone.addEventListener('dragleave', onDragLeave);
@@ -2054,10 +2055,15 @@ function updateCloneUI() {
 /** Enable/disable the clone generate button */
 function updateCloneButton() {
   const hasRef = !!state.selectedRefId;
-  els.cloneGenerateBtn.disabled = !hasRef;
-  els.cloneNotice.textContent = hasRef
-    ? 'Enter text above, then click to generate with the cloned voice.'
-    : 'Select a reference audio above, then enter text.';
+  const hasUrl = !!els.cloneUrl.value.trim();
+  els.cloneGenerateBtn.disabled = !hasRef && !hasUrl;
+  if (hasRef) {
+    els.cloneNotice.textContent = 'Enter text above, then click to generate with the cloned voice.';
+  } else if (hasUrl) {
+    els.cloneNotice.textContent = 'URL will be used directly for cloning (one-step). Or click Download to register it first.';
+  } else {
+    els.cloneNotice.textContent = 'Select a reference audio above, or paste a URL to clone directly.';
+  }
 }
 
 
@@ -2645,7 +2651,9 @@ async function handleClone() {
   // Clone tab has its own text input
   const text = els.cloneText.value.trim();
   if (!text) { showToast('Please enter some text.', 'error'); return; }
-  if (!state.selectedRefId) { showToast('Please select a reference audio.', 'error'); return; }
+
+  const refUrl = els.cloneUrl.value.trim();
+  if (!state.selectedRefId && !refUrl) { showToast('Please select a reference audio or paste a URL.', 'error'); return; }
 
   const language = els.cloneLang.value;
   const speed    = parseFloat(els.cloneSpeed.value);
@@ -2655,17 +2663,23 @@ async function handleClone() {
   setCloneLoading(true);
 
   try {
+    const body = {
+      text,
+      ref_text: refText || null,
+      language,
+      speed,
+      response_format: 'wav',
+    };
+    if (state.selectedRefId) {
+      body.ref_id = state.selectedRefId;
+    } else {
+      body.ref_url = refUrl;
+    }
+
     const res = await fetch('/v1/audio/clone', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        text,
-        ref_id: state.selectedRefId,
-        ref_text: refText || null,
-        language,
-        speed,
-        response_format: 'wav',
-      }),
+      body: JSON.stringify(body),
     });
 
     if (!res.ok) {
@@ -2702,7 +2716,7 @@ async function handleClone() {
     startWaveformAnimation();
 
     const refEntry = state.references.find(r => r.ref_id === state.selectedRefId);
-    const voiceName = refEntry ? `Clone(${refEntry.original_name})` : 'Clone';
+    const voiceName = refEntry ? `Clone(${refEntry.original_name})` : refUrl ? `Clone(${refUrl.split('/').pop() || 'url'})` : 'Clone';
 
     addHistoryEntry({ text, voice: voiceName, language, instructions: '', speed, url, blob, duration, procTime, rtf });
     showToast('Voice clone generated successfully.', 'success');
