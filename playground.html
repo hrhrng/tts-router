@@ -1209,6 +1209,7 @@ const state = {
   compareAudios: [],       // Audio objects for comparison items
   abortController: null,   // for cancelling in-flight requests
   refAudio: null,          // Audio object for previewing reference audio
+  refPlayingId: null,      // ref_id currently being previewed
   references: [],          // list of { ref_id, original_name, duration, uploaded_at }
   selectedRefId: null,     // currently selected reference audio ID
   cloneEnabled: true,      // set from /health endpoint
@@ -2260,16 +2261,37 @@ function renderReferences() {
 }
 
 function previewReference(refId) {
-  if (state.refAudio) { state.refAudio.pause(); state.refAudio = null; }
+  const btn = els.refList.querySelector(`.ref-item-play[data-ref-id="${refId}"]`);
 
+  // Toggle pause if same ref is already playing
+  if (state.refAudio && state.refPlayingId === refId) {
+    if (state.refAudio.paused) {
+      state.refAudio.play();
+      if (btn) btn.innerHTML = '&#9646;&#9646;';
+    } else {
+      state.refAudio.pause();
+      if (btn) btn.innerHTML = '&#9654;';
+    }
+    return;
+  }
+
+  // Stop any other ref playing
+  if (state.refAudio) {
+    const prevBtn = els.refList.querySelector(`.ref-item-play[data-ref-id="${state.refPlayingId}"]`);
+    if (prevBtn) prevBtn.innerHTML = '&#9654;';
+    state.refAudio.pause();
+    state.refAudio = null;
+  }
+
+  state.refPlayingId = refId;
   state.refAudio = new Audio(`/v1/audio/references/${refId}/play`);
   state.refAudio.play();
 
-  const btn = els.refList.querySelector(`.ref-item-play[data-ref-id="${refId}"]`);
   if (btn) btn.innerHTML = '&#9646;&#9646;';
   state.refAudio.addEventListener('ended', () => {
     if (btn) btn.innerHTML = '&#9654;';
     state.refAudio = null;
+    state.refPlayingId = null;
   });
 }
 
