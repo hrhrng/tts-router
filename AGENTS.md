@@ -95,3 +95,42 @@ uv run tts-router serve                 # start server
 uv run tts-router list                  # check model status
 uv run --group dev pytest tests/ -v     # run tests
 ```
+
+## Release SOP
+
+Follow these steps in order when cutting a new release:
+
+1. **Bump version** in `pyproject.toml`:
+   ```
+   version = "x.y.z"
+   ```
+
+2. **Commit and push** the version bump to `main`.
+
+3. **Delete the old tag if it exists** (e.g. if you tagged before bumping pyproject.toml):
+   ```bash
+   git tag -d vx.y.z
+   git push origin :refs/tags/vx.y.z
+   ```
+
+4. **Re-tag at the latest commit**:
+   ```bash
+   git tag vx.y.z
+   git push origin vx.y.z
+   ```
+
+5. **Create a GitHub Release** from the tag — this triggers `publish.yml` which:
+   - Stamps `cli_version` in `skills/tts-router/SKILL.md`
+   - Builds and publishes to PyPI via trusted publishing
+   ```bash
+   gh release create vx.y.z --title "vx.y.z" --generate-notes
+   ```
+
+6. **Update the global skill** after release:
+   ```bash
+   npx skills install ./skills/tts-router --yes --global
+   ```
+
+> **Why this order matters**: `pyproject.toml` must be bumped before tagging, because
+> the CI reads the version from `pyproject.toml` to stamp the skill. Tagging before
+> bumping results in the skill and PyPI package having mismatched versions.
