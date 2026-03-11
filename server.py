@@ -224,10 +224,14 @@ def _ensure_clone_model():
     return _clone_model
 
 
-def _generate_clone_wav(text: str, ref_audio_path: str, ref_text: str,
+def _generate_clone_wav(text: str, ref_audio_path: str, ref_text: str | None,
                         lang_code: str, speed: float = 1.0) -> tuple[str, float]:
     """
-    Generate audio using voice cloning (ICL mode with the Base model).
+    Generate audio using voice cloning with the Base model.
+
+    Two modes depending on *ref_text*:
+    - ICL mode (ref_text provided): highest quality, full in-context learning
+    - X-vector mode (ref_text=None): speaker embedding only, no ASR needed
     Returns (wav_path, elapsed_seconds).
     """
     model = _ensure_clone_model()
@@ -237,7 +241,7 @@ def _generate_clone_wav(text: str, ref_audio_path: str, ref_text: str,
         model,
         text,
         ref_audio=ref_audio_path,
-        ref_text=ref_text or "",
+        ref_text=ref_text or None,
         speed=speed,
         lang_code=lang_code,
         output_dir=tmp_dir,
@@ -785,7 +789,7 @@ class CloneRequest(BaseModel):
     text: str = Field(..., description="Text to synthesise with cloned voice")
     ref_id: Optional[str] = Field(None, description="Reference audio ID from a previous upload")
     ref_url: Optional[str] = Field(None, description="URL to download reference audio from (direct link, YouTube, Bilibili, etc.)")
-    ref_text: Optional[str] = Field(None, description="Transcript of the reference audio (optional, auto-detected if omitted)")
+    ref_text: Optional[str] = Field(None, description="Transcript of the reference audio. If provided, uses ICL mode (best quality). If omitted, uses x-vector mode (speaker embedding only, no ASR needed).")
     language: Optional[str] = Field(None, description="Language hint: Chinese, English, Japanese, …")
     speed: float = Field(1.0, ge=0.5, le=2.0, description="Playback speed multiplier")
     response_format: str = Field("wav", description="Output format: wav, mp3, flac, aac, opus")
@@ -845,7 +849,7 @@ async def clone_speech(req: CloneRequest):
         async with _gen_lock:
             wav_path, elapsed = await asyncio.to_thread(
                 _generate_clone_wav,
-                req.text, ref_wav, req.ref_text or "", lang_code, req.speed,
+                req.text, ref_wav, req.ref_text or None, lang_code, req.speed,
             )
     except Exception as e:
         raise HTTPException(500, f"Voice clone generation failed: {e}")
