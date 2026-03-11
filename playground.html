@@ -5,45 +5,45 @@
 ║  MODULE INDEX (line numbers for agent navigation)                            ║
 ║  ──────────────────────────────────────────────────────────────────────────── ║
 ║  CSS                                                                         ║
-║    :root variables & reset .............. ~L12                                ║
-║    Layout (header, tabs, main grid) ..... ~L50                               ║
-║    Cards & form elements ................ ~L145                               ║
-║    Buttons .............................. ~L243                               ║
-║    Player & waveform .................... ~L333                               ║
-║    Voice comparison ..................... ~L401                               ║
-║    History list ......................... ~L464                               ║
-║    Toast notifications .................. ~L523                               ║
-║    Voice clone (drop zone, refs, trim) .. ~L572                              ║
-║    Responsive breakpoints ............... ~L872                               ║
+║    :root variables & reset .............. ~L58                                ║
+║    Layout (header, tabs, main grid) ..... ~L99                               ║
+║    Cards & form elements ................ ~L194                               ║
+║    Buttons .............................. ~L292                               ║
+║    Player & waveform .................... ~L383                               ║
+║    Voice comparison ..................... ~L451                               ║
+║    History list ......................... ~L514                               ║
+║    Toast notifications .................. ~L573                               ║
+║    Voice clone (drop zone, refs, trim) .. ~L622                              ║
+║    Responsive breakpoints ............... ~L921                               ║
 ║                                                                              ║
 ║  HTML                                                                        ║
-║    Header (logo, health, API docs) ...... ~L884                              ║
-║    Tab bar (TTS / Voice Clone) .......... ~L900                              ║
-║    TTS panel (text, lang, voice, etc) ... ~L915                              ║
-║    Clone panel (URL, upload, refs, gen) . ~L975                              ║
-║    Results panel (player, compare, hist)  ~L1058                             ║
+║    Header (logo, health, API docs) ...... ~L933                              ║
+║    Tab bar (TTS / Voice Clone) .......... ~L954                              ║
+║    TTS panel (text, lang, voice, etc) ... ~L964                              ║
+║    Clone panel (URL, upload, refs, gen) . ~L1043                             ║
+║    Results panel (player, compare, hist)  ~L1127                             ║
 ║                                                                              ║
 ║  JavaScript                                                                  ║
-║    Constants (SPEAKER_MAP, PRESETS) ..... ~L1092                              ║
-║    State object ......................... ~L1121                              ║
-║    DOM cache & init ..................... ~L1158                              ║
-║    Tab switching ........................ ~L1290                              ║
-║    Voice/language linking ............... ~L1306                              ║
-║    Presets .............................. ~L1330                              ║
-║    API: callTTS() ...................... ~L1357                               ║
-║    TTS generation handler .............. ~L1391                               ║
-║    Voice comparison .................... ~L1455                               ║
-║    Player controls ..................... ~L1581                               ║
-║    Waveform visualization .............. ~L1629                               ║
-║    History management .................. ~L1705                               ║
-║    Health check ........................ ~L1788                               ║
-║    Utilities ........................... ~L1817                               ║
-║    Clone: UI state ..................... ~L1860                               ║
-║    Clone: URL download ................. ~L1893                               ║
-║    Clone: file upload (drag & drop) .... ~L1939                              ║
-║    Clone: reference list ............... ~L2003                               ║
-║    Clone: inline trim editor ........... ~L2115                              ║
-║    Clone: generation ................... ~L2469                               ║
+║    Constants (SPEAKER_MAP, PRESETS) ..... ~L1164                              ║
+║    State object ......................... ~L1195                              ║
+║    DOM cache & init ..................... ~L1231                              ║
+║    Tab switching ........................ ~L1380                              ║
+║    Voice/language linking ............... ~L1399                              ║
+║    Presets .............................. ~L1437                              ║
+║    API: callTTS() ...................... ~L1461                               ║
+║    TTS generation handler .............. ~L1502                               ║
+║    Voice comparison .................... ~L1570                               ║
+║    Player controls ..................... ~L1700                               ║
+║    Waveform visualization .............. ~L1748                               ║
+║    History management .................. ~L1824                               ║
+║    Health check ........................ ~L1903                               ║
+║    Model info / UI adaptation .......... ~L1938                               ║
+║    Clone: UI state ..................... ~L1989                               ║
+║    Clone: URL download ................. ~L2071                               ║
+║    Clone: file upload (drag & drop) .... ~L2117                              ║
+║    Clone: reference list ............... ~L2181                               ║
+║    Clone: inline trim editor ........... ~L2315                              ║
+║    Clone: generation ................... ~L2666                               ║
 ║                                                                              ║
 ║  NOTE: After editing, update line numbers above to keep index accurate.      ║
 ╚═══════════════════════════════════════════════════════════════════════════════╝
@@ -1043,16 +1043,16 @@ input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); }
       <!-- ═══ Voice Clone Tab Panel ═══════════════════════════════════════ -->
       <div class="tab-panel" id="panel-clone">
         <div id="clone-content">
-          <!-- Add Reference Audio card -->
+          <!-- Reference Audio card -->
           <div class="card">
-            <h3>Add Reference Audio</h3>
+            <h3>Reference Audio</h3>
 
             <!-- URL input -->
-            <label for="clone-url">URL</label>
+            <label for="clone-url">URL <span style="color:var(--text-tertiary);font-weight:400;font-size:11px">— paste &amp; Generate directly, or Save to reuse</span></label>
             <div class="url-input-row">
               <input type="url" id="clone-url" placeholder="Paste YouTube / Bilibili / audio URL...">
-              <button class="btn-download" id="clone-url-btn">
-                <span id="clone-url-label">Download</span>
+              <button class="btn-download" id="clone-url-btn" title="Download and save as a reusable reference">
+                <span id="clone-url-label">Save</span>
               </button>
             </div>
             <div class="url-hint" id="clone-url-hint">Supports direct audio links (.mp3, .wav, etc.)</div>
@@ -2045,7 +2045,7 @@ function updateCloneUI() {
   // Update URL hint based on available extractors
   const extractors = state.urlExtractors;
   if (extractors.includes('yt-dlp')) {
-    els.cloneUrlHint.textContent = 'Supports YouTube, Bilibili, and direct audio links (.mp3, .wav, etc.)';
+    els.cloneUrlHint.textContent = 'Supports YouTube, Bilibili, and direct audio links — paste & Generate to clone in one step';
   } else if (extractors.includes('http')) {
     els.cloneUrlHint.textContent = 'Supports direct audio links (.mp3, .wav, etc.) — install yt-dlp for YouTube/Bilibili';
   } else {
@@ -2109,7 +2109,7 @@ async function handleUrlDownload() {
   } finally {
     state.downloading = false;
     els.cloneUrlBtn.disabled = false;
-    els.cloneUrlLabel.textContent = 'Download';
+    els.cloneUrlLabel.textContent = 'Save';
   }
 }
 
