@@ -59,7 +59,7 @@ import uvicorn
 import soundfile as sf
 from fastapi import FastAPI, HTTPException, Request, UploadFile, File
 from fastapi.responses import Response, JSONResponse, StreamingResponse, FileResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from typing import Optional
 
 from backends import get_backend
@@ -783,18 +783,25 @@ async def trim_reference(ref_id: str, req: TrimRequest):
 class CloneRequest(BaseModel):
     """Request body for voice cloning generation."""
     text: str = Field(..., description="Text to synthesise with cloned voice")
-    ref_id: str = Field(..., description="Reference audio ID from upload")
+    ref_id: Optional[str] = Field(None, description="Reference audio ID from a previous upload")
+    ref_url: Optional[str] = Field(None, description="URL to download reference audio from (direct link, YouTube, Bilibili, etc.)")
     ref_text: Optional[str] = Field(None, description="Transcript of the reference audio (optional, auto-detected if omitted)")
     language: Optional[str] = Field(None, description="Language hint: Chinese, English, Japanese, …")
     speed: float = Field(1.0, ge=0.5, le=2.0, description="Playback speed multiplier")
     response_format: str = Field("wav", description="Output format: wav, mp3, flac, aac, opus")
+
+    @model_validator(mode="after")
+    def check_ref(self):
+        if not self.ref_id and not self.ref_url:
+            raise ValueError("Either ref_id or ref_url is required")
+        return self
 
 
 @app.post("/v1/audio/clone")
 async def clone_speech(req: CloneRequest):
     """
     Generate speech using voice cloning.
-    Requires a previously uploaded reference audio (ref_id).
+    Provide either ref_id (previously uploaded reference) or ref_url (URL to download on the fly).
     On first call, the Base model (~2GB) will be downloaded from HuggingFace.
     """
     if _clone_disabled:
@@ -805,10 +812,32 @@ async def clone_speech(req: CloneRequest):
     if req.response_format not in FORMAT_MIME:
         raise HTTPException(400, f"Unsupported format '{req.response_format}', use: {list(FORMAT_MIME)}")
 
-    # Verify reference audio exists
-    ref_wav = os.path.join(REFERENCES_DIR, f"{req.ref_id}.wav")
-    if not os.path.exists(ref_wav):
-        raise HTTPException(404, f"Reference audio '{req.ref_id}' not found. Upload one first.")
+    tmp_dir = None
+    if req.ref_url:
+        # Download reference audio from URL on the fly
+        url = req.ref_url.strip()
+        extractor = None
+        for ext in _extractor_chain:
+            if ext.can_handle(url):
+                extractor = ext
+                break
+        if extractor is None:
+            names = get_extractor_names(_extractor_chain)
+            if "yt-dlp" not in names:
+                raise HTTPException(400, "This URL is not a direct audio link. Install yt-dlp to support YouTube/Bilibili and 1000+ sites.")
+            raise HTTPException(400, "No extractor can handle this URL.")
+        tmp_dir = tempfile.mkdtemp(prefix="tts_clone_ref_")
+        try:
+            result = await asyncio.to_thread(extractor.extract, url, tmp_dir)
+        except Exception as e:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+            raise HTTPException(500, f"Audio extraction failed: {e}")
+        ref_wav = result.path
+    else:
+        # Verify reference audio exists by ref_id
+        ref_wav = os.path.join(REFERENCES_DIR, f"{req.ref_id}.wav")
+        if not os.path.exists(ref_wav):
+            raise HTTPException(404, f"Reference audio '{req.ref_id}' not found. Upload one first.")
 
     lang_code = _resolve_lang_code(req.language, req.text)
 
@@ -824,8 +853,10 @@ async def clone_speech(req: CloneRequest):
     info = sf.info(wav_path)
     audio_bytes = _convert_wav(wav_path, req.response_format)
 
-    # Cleanup temp directory
+    # Cleanup temp directories
     shutil.rmtree(os.path.dirname(wav_path), ignore_errors=True)
+    if tmp_dir:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
     gc.collect()
 
     return Response(
