@@ -15,6 +15,12 @@ jobs:
 
       - uses: astral-sh/setup-uv@v5
 
+      - name: Stamp skill version
+        run: |
+          VERSION=$(uv run python -c "import tomllib; d=tomllib.load(open('pyproject.toml','rb')); print(d['project']['version'])")
+          sed -i "s/^cli_version: .*/cli_version: $VERSION/" skills/tts-router/SKILL.md
+          sed -i "s/CLI >= \*\*[0-9.]*\*\*/CLI >= **$VERSION**/" skills/tts-router/SKILL.md
+
       - name: Build package
         run: uv build
 

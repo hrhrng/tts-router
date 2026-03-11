@@ -1,6 +1,6 @@
 [project]
 name = "tts-router"
-version = "0.1.0"
+version = "0.1.1"
 description = "Local TTS router — multi-backend (MLX, VibeVoice), DashScope + OpenAI compatible"
 readme = "README.md"
 license = "MIT"

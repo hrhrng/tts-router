@@ -1,12 +1,31 @@
 ---
 name: tts-router
 description: Local TTS router for Apple Silicon — pull models, serve OpenAI-compatible API, synthesize speech, clone voices. Use when the user asks to "generate speech", "text to speech", "start TTS server", "pull a TTS model", "clone a voice", "speak in someone's voice", or any task involving local speech synthesis on macOS.
+cli_version: 0.1.1
 ---
 
 # tts-router — Local TTS Router for Apple Silicon
 
 A CLI that manages and serves multiple TTS models locally on Apple Silicon (MLX).
 Models are downloaded from HuggingFace Hub and served via OpenAI + DashScope compatible APIs.
+
+## Version Check
+
+This skill requires `tts-router` CLI >= **0.1.1** (see `cli_version` in frontmatter).
+
+Before running any command, check the installed version:
+
+```bash
+tts-router --version
+```
+
+If the version is older or the command is not found, upgrade first:
+
+```bash
+uvx --prerelease=allow --refresh tts-router --version
+# or if installed via pip:
+pip install --upgrade tts-router
+```
 
 ## Prerequisites
 
